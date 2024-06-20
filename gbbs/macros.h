@@ -23,8 +23,8 @@
 
 #pragma once
 
-#include <limits.h>
 #include "bridge.h"
+#include <limits.h>
 
 namespace gbbs {
 #define GBBSLONG 1
@@ -42,8 +42,8 @@ typedef unsigned long ulong;
 // If the number of edges is more than sizeof(MAX_UINT),
 // you should set the GBBSLONG flag on the command line.
 #if defined(GBBSLONG)
-typedef long intT;
-typedef unsigned long uintT;
+typedef int64_t intT;
+typedef uint64_t uintT;
 #define INT_T_MAX LONG_MAX
 #define UINT_T_MAX ULONG_MAX
 #else
@@ -62,15 +62,15 @@ typedef unsigned long uintE;
 #define INT_E_MAX LONG_MAX
 #define UINT_E_MAX ULONG_MAX
 #else
-typedef int intE;
-typedef unsigned int uintE;
+typedef int32_t intE;
+typedef uint32_t uintE;
 #define INT_E_MAX INT_MAX
 #define UINT_E_MAX UINT_MAX
 #endif
 
 struct vertex_data {
-  size_t offset;  // offset into the edges (static)
-  uintE degree;   // possibly decreased by a (mutable) algorithm.
+  size_t offset; // offset into the edges (static)
+  uintE degree;  // possibly decreased by a (mutable) algorithm.
 };
 
 // Default granularity of a parallel for loop.
@@ -102,4 +102,4 @@ typedef unsigned char uchar;
 #define compression bytepd
 #endif
 #endif
-}  // namespace gbbs
+} // namespace gbbs

@@ -972,8 +972,8 @@ void write_symmetric_graph_binary_format(Graph& GA, std::ofstream& out,
       auto map_f = [&](const uintE& u, const uintE& v, const W& wgh) {
         return wgh;
       };
-      auto write_f = [&](const uintE& ngh, const uintT& offset, const W& val) {
-        edges[offset] = std::make_tuple(ngh, val);
+      auto write_f = [&](const uintE& ngh, const uintT& offset, const W& val) { 
+        edges[offset] = std::make_tuple(val, ngh); // workaround for tuples
       };
       GA.get_vertex(i).out_neighbors().copy(our_offset, map_f, write_f);
     });
@@ -1048,7 +1048,7 @@ void write_asymmetric_graph_binary_format(Graph& GA, std::ofstream& out,
         };
         auto write_f = [&](const uintE& ngh, const uintT& offset,
                            const W& val) {
-          edges[offset] = std::make_tuple(ngh, val);
+          edges[offset] = std::make_tuple(val, ngh); // workaround for tuples
         };
         get_nghs(i).copy(our_offset, map_f, write_f);
       });

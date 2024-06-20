@@ -1,14 +1,14 @@
 licenses(["notice"])
 
 package(
-    default_visibility = ["//visibility:public"],
+    default_visibility=["//visibility:public"],
 )
 
 # main header for GBBS
 cc_library(
-    name = "gbbs",
-    hdrs = ["gbbs.h"],
-    deps = [
+    name="gbbs",
+    hdrs=["gbbs.h"],
+    deps=[
         ":benchmark",
         ":bridge",
         ":flags",
@@ -16,15 +16,16 @@ cc_library(
         ":interface",
         ":macros",
         ":vertex_subset",
+        ":source",
         "//gbbs/helpers:parse_command_line",
     ],
 )
 
 # main header for Julienne
 cc_library(
-    name = "julienne",
-    hdrs = ["julienne.h"],
-    deps = [
+    name="julienne",
+    hdrs=["julienne.h"],
+    deps=[
         ":bucket",
         ":gbbs",
         "//gbbs/helpers:dyn_arr",
@@ -32,10 +33,10 @@ cc_library(
 )
 
 cc_library(
-    name = "bridge",
-    hdrs = ["bridge.h"],
-    linkopts = ["-pthread"],
-    deps = [
+    name="bridge",
+    hdrs=["bridge.h"],
+    linkopts=["-pthread"],
+    deps=[
         "@parlaylib//parlay:delayed",
         "@parlaylib//parlay:delayed_sequence",
         "@parlaylib//parlay:io",
@@ -58,9 +59,9 @@ cc_library(
 )
 
 cc_library(
-    name = "bucket",
-    hdrs = ["bucket.h"],
-    deps = [
+    name="bucket",
+    hdrs=["bucket.h"],
+    deps=[
         ":bridge",
         ":vertex_subset",
         "//gbbs/helpers:dyn_arr",
@@ -68,9 +69,9 @@ cc_library(
 )
 
 cc_library(
-    name = "compressed_vertex",
-    hdrs = ["compressed_vertex.h"],
-    deps = [
+    name="compressed_vertex",
+    hdrs=["compressed_vertex.h"],
+    deps=[
         ":bridge",
         ":macros",
         "//gbbs/encodings:decoders",
@@ -78,9 +79,9 @@ cc_library(
 )
 
 cc_library(
-    name = "edge_map_blocked",
-    hdrs = ["edge_map_blocked.h"],
-    deps = [
+    name="edge_map_blocked",
+    hdrs=["edge_map_blocked.h"],
+    deps=[
         ":bridge",
         ":edge_map_utils",
         ":flags",
@@ -89,9 +90,9 @@ cc_library(
 )
 
 cc_library(
-    name = "edge_map_reduce",
-    hdrs = ["edge_map_reduce.h"],
-    deps = [
+    name="edge_map_reduce",
+    hdrs=["edge_map_reduce.h"],
+    deps=[
         ":bridge",
         ":flags",
         ":vertex_subset",
@@ -100,17 +101,17 @@ cc_library(
 )
 
 cc_library(
-    name = "edge_map_utils",
-    hdrs = ["edge_map_utils.h"],
-    deps = [
+    name="edge_map_utils",
+    hdrs=["edge_map_utils.h"],
+    deps=[
         ":macros",
     ],
 )
 
 cc_library(
-    name = "edge_array",
-    hdrs = ["edge_array.h"],
-    deps = [
+    name="edge_array",
+    hdrs=["edge_array.h"],
+    deps=[
         ":bridge",
         ":macros",
         ":vertex",
@@ -119,14 +120,16 @@ cc_library(
 )
 
 cc_library(
-    name = "flags",
-    hdrs = ["flags.h"],
+    name="flags",
+    hdrs=["flags.h"],
 )
 
+cc_library(name="source", hdrs=["source.h"], deps=[":macros"])
+
 cc_library(
-    name = "graph_mutation",
-    hdrs = ["graph_mutation.h"],
-    deps = [
+    name="graph_mutation",
+    hdrs=["graph_mutation.h"],
+    deps=[
         ":bridge",
         ":compressed_vertex",
         ":edge_array",
@@ -136,9 +139,9 @@ cc_library(
 )
 
 cc_library(
-    name = "edge_map_data",
-    hdrs = ["edge_map_data.h"],
-    deps = [
+    name="edge_map_data",
+    hdrs=["edge_map_data.h"],
+    deps=[
         ":bridge",
         ":compressed_vertex",
         ":edge_map_blocked",
@@ -150,9 +153,9 @@ cc_library(
 )
 
 cc_library(
-    name = "graph",
-    hdrs = ["graph.h"],
-    deps = [
+    name="graph",
+    hdrs=["graph.h"],
+    deps=[
         ":bridge",
         ":compressed_vertex",
         ":edge_array",
@@ -167,9 +170,9 @@ cc_library(
 )
 
 cc_library(
-    name = "interface",
-    hdrs = ["interface.h"],
-    deps = [
+    name="interface",
+    hdrs=["interface.h"],
+    deps=[
         ":edge_array",
         ":edge_map_data",
         ":edge_map_reduce",
@@ -182,9 +185,9 @@ cc_library(
 )
 
 cc_library(
-    name = "contract",
-    hdrs = ["contract.h"],
-    deps = [
+    name="contract",
+    hdrs=["contract.h"],
+    deps=[
         ":bridge",
         ":graph",
         ":vertex",
@@ -193,10 +196,10 @@ cc_library(
 )
 
 cc_library(
-    name = "graph_io",
-    srcs = ["graph_io.cc"],
-    hdrs = ["graph_io.h"],
-    deps = [
+    name="graph_io",
+    srcs=["graph_io.cc"],
+    hdrs=["graph_io.h"],
+    deps=[
         ":graph",
         ":io",
         ":macros",
@@ -206,42 +209,42 @@ cc_library(
 )
 
 cc_library(
-    name = "io",
-    srcs = ["io.cc"],
-    hdrs = ["io.h"],
-    deps = [
+    name="io",
+    srcs=["io.cc"],
+    hdrs=["io.h"],
+    deps=[
         ":macros",
     ],
 )
 
 cc_library(
-    name = "benchmark",
-    hdrs = ["benchmark.h"],
-    deps = [
+    name="benchmark",
+    hdrs=["benchmark.h"],
+    deps=[
         ":graph_io",
     ],
 )
 
 cc_library(
-    name = "macros",
-    hdrs = ["macros.h"],
-    deps = [
+    name="macros",
+    hdrs=["macros.h"],
+    deps=[
         ":bridge",
     ],
 )
 
 cc_library(
-    name = "intersect",
-    hdrs = ["intersect.h"],
-    deps = [
+    name="intersect",
+    hdrs=["intersect.h"],
+    deps=[
         ":macros",
     ],
 )
 
 cc_library(
-    name = "vertex",
-    hdrs = ["vertex.h"],
-    deps = [
+    name="vertex",
+    hdrs=["vertex.h"],
+    deps=[
         ":bridge",
         ":intersect",
         ":macros",
@@ -249,9 +252,9 @@ cc_library(
 )
 
 cc_library(
-    name = "vertex_subset",
-    hdrs = ["vertex_subset.h"],
-    deps = [
+    name="vertex_subset",
+    hdrs=["vertex_subset.h"],
+    deps=[
         ":bridge",
         ":flags",
         ":macros",

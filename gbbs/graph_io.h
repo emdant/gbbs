@@ -23,11 +23,11 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #pragma once
 
-#include <sys/mman.h>
 #include <algorithm>
 #include <exception>
 #include <fstream>
 #include <string>
+#include <sys/mman.h>
 #include <type_traits>
 #include <vector>
 
@@ -41,8 +41,7 @@
 namespace gbbs {
 namespace gbbs_io {
 
-template <class weight_type>
-struct Edge {
+template <class weight_type> struct Edge {
   uintE from;
   uintE to;
   weight_type weight;
@@ -53,30 +52,35 @@ struct Edge {
       : from(_from), to(_to), weight(_weight) {}
 };
 
-template <>
-Edge<gbbs::empty>::Edge(uintE _from, uintE _to);
+template <> Edge<gbbs::empty>::Edge(uintE _from, uintE _to);
 
-namespace internal {  // Internal declarations
+namespace internal { // Internal declarations
 
 // Header string expected at the top of unweighted adjacency graph files.
 const std::string kUnweightedAdjGraphHeader = "AdjacencyGraph";
 // Header string expected at the top of weighted adjacency graph files.
 const std::string kWeightedAdjGraphHeader = "WeightedAdjacencyGraph";
 
-void skip_ifstream_comments(std::ifstream* stream);
+void skip_ifstream_comments(std::ifstream *stream);
 
 template <class weight_type>
-size_t get_num_vertices_from_edges(const sequence<Edge<weight_type>>&);
+size_t get_num_vertices_from_edges(const sequence<Edge<weight_type>> &);
 
 template <class weight_type>
-vertex_data* sorted_edges_to_vertex_data_array(
-    size_t, const sequence<Edge<weight_type>>&);
+vertex_data *
+sorted_edges_to_vertex_data_array(size_t, const sequence<Edge<weight_type>> &);
 
 template <class weight_type>
-std::tuple<size_t, size_t, uintT*, std::tuple<uintE, weight_type>*>
-parse_weighted_graph(const char* fname, bool mmap, bool binary,
-                     char* bytes = nullptr,
+std::tuple<size_t, size_t, uintT *, std::tuple<uintE, weight_type> *>
+parse_weighted_graph(const char *fname, bool mmap, bool binary,
+                     char *bytes = nullptr,
                      size_t bytes_size = std::numeric_limits<size_t>::max());
+
+template <class weight_type>
+std::tuple<size_t, size_t, uintT *, std::tuple<uintE, weight_type> *>
+parse_gap_weighted_graph(
+    const char *fname, bool mmap, bool binary, char *bytes = nullptr,
+    size_t bytes_size = std::numeric_limits<size_t>::max());
 
 // Output a list of sorted edges with no duplicates and no self-loop edges.  If
 // there are multiple edges between the same endpoints with different weights,
@@ -86,33 +90,34 @@ parse_weighted_graph(const char* fname, bool mmap, bool binary,
 template <class weight_type>
 sequence<Edge<weight_type>> sort_and_dedupe(sequence<Edge<weight_type>> edges);
 
-}  // namespace internal
+} // namespace internal
 
 /* Returns a tuple containing (n, m, offsets, edges) --- the number of
  * vertices, edges, the vertex offsets, and the edge values, after
  * parsing the input graph file */
-std::tuple<size_t, size_t, uintT*, uintE*> parse_unweighted_graph(
-    const char* fname, bool mmap, bool binary, char* bytes = nullptr,
-    size_t bytes_size = std::numeric_limits<size_t>::max());
+std::tuple<size_t, size_t, uintT *, uintE *>
+parse_unweighted_graph(const char *fname, bool mmap, bool binary,
+                       char *bytes = nullptr,
+                       size_t bytes_size = std::numeric_limits<size_t>::max());
 
 symmetric_graph<symmetric_vertex, gbbs::empty> read_unweighted_symmetric_graph(
-    const char* fname, bool mmap, bool binary, char* bytes = nullptr,
+    const char *fname, bool mmap, bool binary, char *bytes = nullptr,
     size_t bytes_size = std::numeric_limits<size_t>::max());
 
 asymmetric_graph<asymmetric_vertex, gbbs::empty>
 read_unweighted_asymmetric_graph(
-    const char* fname, bool mmap, bool binary, char* bytes = nullptr,
+    const char *fname, bool mmap, bool binary, char *bytes = nullptr,
     size_t bytes_size = std::numeric_limits<size_t>::max());
 
-std::tuple<char*, size_t> parse_compressed_graph(const char* fname, bool mmap);
+std::tuple<char *, size_t> parse_compressed_graph(const char *fname, bool mmap);
 
 template <class weight_type>
 symmetric_graph<symmetric_vertex, weight_type> read_weighted_symmetric_graph(
-    const char* fname, bool mmap, bool binary, char* bytes = nullptr,
+    const char *fname, bool mmap, bool binary, char *bytes = nullptr,
     size_t bytes_size = std::numeric_limits<size_t>::max()) {
   size_t n, m;
-  uintT* offsets;
-  std::tuple<uintE, weight_type>* edges;
+  uintT *offsets;
+  std::tuple<uintE, weight_type> *edges;
   std::tie(n, m, offsets, edges) = internal::parse_weighted_graph<weight_type>(
       fname, mmap, binary, bytes, bytes_size);
 
@@ -138,18 +143,50 @@ symmetric_graph<symmetric_vertex, weight_type> read_weighted_symmetric_graph(
 
 template <class weight_type>
 asymmetric_graph<asymmetric_vertex, weight_type> read_weighted_asymmetric_graph(
-    const char* fname, bool mmap, bool binary, char* bytes = nullptr,
+    const char *fname, bool mmap, bool binary, char *bytes = nullptr,
     size_t bytes_size = std::numeric_limits<size_t>::max()) {
   using id_and_weight = std::tuple<uintE, weight_type>;
   using triple = std::pair<uintE, std::pair<uintE, weight_type>>;
 
   size_t n, m;
-  uintT* offsets;
-  std::tuple<uintE, weight_type>* edges;
+  uintT *offsets;
+  std::tuple<uintE, weight_type> *edges;
   if (binary) {
-    std::cout << "Todo: implement binary support for asymmetric graphs"
-              << std::endl;
-    exit(-1);
+    using id_and_weight = std::tuple<uintE, weight_type>;
+
+    size_t n, m;
+    std::pair<char *, size_t> MM = mmapStringFromFile(fname);
+    auto mmap_file = MM.first;
+    long *sizes = (long *)mmap_file;
+    n = sizes[0], m = sizes[1];
+    uintT *out_offsets = (uintT *)(mmap_file + 3 * sizeof(long));
+    uint64_t skip = 3 * sizeof(long) + (n + 1) * sizeof(uintT);
+    id_and_weight *out_edges = (id_and_weight *)(mmap_file + skip);
+    skip += m * sizeof(id_and_weight);
+
+    uintT *in_offsets = (uintT *)(mmap_file + skip + 3 * sizeof(long));
+    skip += 3 * sizeof(long) + (n + 1) * sizeof(uintT);
+    id_and_weight *in_edges = (id_and_weight *)(mmap_file + skip);
+
+    auto v_out_data = gbbs::new_array_no_init<vertex_data>(n);
+    parallel_for(0, n, [&](size_t i) {
+      v_out_data[i].offset = out_offsets[i];
+      v_out_data[i].degree = out_offsets[i + 1] - v_out_data[i].offset;
+    });
+
+    auto v_in_data = gbbs::new_array_no_init<vertex_data>(n);
+    parallel_for(0, n, [&](size_t i) {
+      v_in_data[i].offset = in_offsets[i];
+      v_in_data[i].degree = in_offsets[i + 1] - v_in_data[i].offset;
+    });
+
+    return asymmetric_graph<asymmetric_vertex, weight_type>(
+        v_out_data, v_in_data, n, m,
+        [=]() {
+          gbbs::free_array(v_out_data, n);
+          gbbs::free_array(v_in_data, n);
+        },
+        out_edges, in_edges);
   }
   std::tie(n, m, offsets, edges) = internal::parse_weighted_graph<weight_type>(
       fname, mmap, binary, bytes, bytes_size);
@@ -163,12 +200,12 @@ asymmetric_graph<asymmetric_vertex, weight_type> read_weighted_asymmetric_graph(
 
   auto tOffsets = sequence<uintT>::uninitialized(n + 1);
   parallel_for(0, n, [&](size_t i) { tOffsets[i] = INT_T_MAX; });
-  triple* temp = gbbs::new_array_no_init<triple>(m);
+  triple *temp = gbbs::new_array_no_init<triple>(m);
   parallel_for(0, n, [&](size_t i) {
     uintT o = v_data[i].offset;
     uintE deg = v_data[i].degree;
     for (uintT j = 0; j < deg; j++) {
-      auto& cur_edge = (edges + o)[j];
+      auto &cur_edge = (edges + o)[j];
       temp[o + j] =
           std::make_pair(std::get<0>(cur_edge),
                          std::make_pair((uintE)i, std::get<1>(cur_edge)));
@@ -177,10 +214,10 @@ asymmetric_graph<asymmetric_vertex, weight_type> read_weighted_asymmetric_graph(
 
   auto temp_seq = gbbs::make_slice(temp, m);
   parlay::integer_sort_inplace(temp_seq,
-                               [&](const triple& p) { return p.first; });
+                               [&](const triple &p) { return p.first; });
 
   tOffsets[temp[0].first] = 0;
-  id_and_weight* inEdges = gbbs::new_array_no_init<id_and_weight>(m);
+  id_and_weight *inEdges = gbbs::new_array_no_init<id_and_weight>(m);
   inEdges[0] = std::make_tuple(temp[0].second.first, temp[0].second.second);
 
   parallel_for(1, m, [&](size_t i) {
@@ -217,24 +254,129 @@ asymmetric_graph<asymmetric_vertex, weight_type> read_weighted_asymmetric_graph(
 }
 
 template <class weight_type>
+symmetric_graph<symmetric_vertex, weight_type>
+read_gap_weighted_symmetric_graph(
+    const char *fname, bool mmap, bool binary, char *bytes = nullptr,
+    size_t bytes_size = std::numeric_limits<size_t>::max()) {
+  using id_and_weight = std::tuple<uintE, weight_type>;
+
+  std::pair<char *, size_t> MM = mmapStringFromFile(fname);
+  auto mmap_file = MM.first;
+
+  size_t n, m;
+  uintT *out_offsets;
+  id_and_weight *out_edges;
+
+  bool directed = ((bool *)mmap_file)[0];
+  if (directed) {
+    std::cout << "error: graph must be undirected" << std::endl;
+    std::terminate();
+  }
+
+  uintT *sizes = (uintT *)(mmap_file + sizeof(bool));
+  m = sizes[0], n = sizes[1];
+  std::cout << m << " " << n << std::endl;
+
+  out_offsets = (uintT *)(mmap_file + sizeof(bool) + 2 * sizeof(long));
+  auto v_out_data = gbbs::new_array_no_init<vertex_data>(n);
+  parallel_for(0, n, [&](size_t i) {
+    v_out_data[i].offset = out_offsets[i];
+    v_out_data[i].degree = out_offsets[i + 1] - v_out_data[i].offset;
+  });
+  std::cout << v_out_data[n - 1].degree << std::endl;
+  std::cout << "out_offsets" << std::endl;
+
+  uint64_t skip = sizeof(bool) + 2 * sizeof(uintT) + (n + 1) * sizeof(uintT);
+  out_edges = (id_and_weight *)(mmap_file + skip);
+  std::cout << "out_edges" << std::endl;
+
+  return symmetric_graph<symmetric_vertex, weight_type>(
+      v_out_data, n, m, [=]() { gbbs::free_array(v_out_data, n); }, out_edges);
+}
+
+template <class weight_type>
+asymmetric_graph<asymmetric_vertex, weight_type>
+read_gap_weighted_asymmetric_graph(
+    const char *fname, bool mmap, bool binary, char *bytes = nullptr,
+    size_t bytes_size = std::numeric_limits<size_t>::max()) {
+  using id_and_weight = std::tuple<uintE, weight_type>;
+
+  std::pair<char *, size_t> MM = mmapStringFromFile(fname);
+  auto mmap_file = MM.first;
+
+  size_t n, m;
+  uintT *out_offsets, *in_offsets;
+  id_and_weight *out_edges;
+  id_and_weight *in_edges;
+
+  bool directed = ((bool *)mmap_file)[0];
+  if (!directed) {
+    std::cout << "error: graph must be directed" << std::endl;
+    std::terminate();
+  }
+
+  uintT *sizes = (uintT *)(mmap_file + sizeof(bool));
+  m = sizes[0], n = sizes[1];
+  std::cout << m << " " << n << std::endl;
+
+  out_offsets = (uintT *)(mmap_file + sizeof(bool) + 2 * sizeof(long));
+  auto v_out_data = gbbs::new_array_no_init<vertex_data>(n);
+  parallel_for(0, n, [&](size_t i) {
+    v_out_data[i].offset = out_offsets[i];
+    v_out_data[i].degree = out_offsets[i + 1] - v_out_data[i].offset;
+  });
+  std::cout << v_out_data[n - 1].degree << std::endl;
+  std::cout << "out_offsets" << std::endl;
+
+  uint64_t skip = sizeof(bool) + 2 * sizeof(uintT) + (n + 1) * sizeof(uintT);
+  out_edges = (id_and_weight *)(mmap_file + skip);
+  std::cout << "out_edges" << std::endl;
+
+  uintE *edg = (uintE *)out_edges;
+  std::cout << std::get<0>(out_edges[0]) << "," << std::get<1>(out_edges[0])
+            << std::endl;
+
+  skip += (m * 2 * sizeof(uintE));
+  in_offsets = (uintT *)(mmap_file + skip);
+  auto v_in_data = gbbs::new_array_no_init<vertex_data>(n);
+  parallel_for(0, n, [&](size_t i) {
+    v_in_data[i].offset = in_offsets[i];
+    v_in_data[i].degree = in_offsets[i + 1] - v_in_data[i].offset;
+  });
+  std::cout << "in_offsets" << std::endl;
+
+  skip += ((n + 1) * sizeof(uintT));
+  in_edges = (id_and_weight *)(mmap_file + skip);
+  std::cout << "in_edges" << std::endl;
+
+  return asymmetric_graph<asymmetric_vertex, weight_type>(
+      v_out_data, v_in_data, n, m,
+      [=]() {
+        gbbs::free_array(v_out_data, n);
+        gbbs::free_array(v_in_data, n);
+      },
+      out_edges, in_edges);
+}
+
+template <class weight_type>
 symmetric_graph<csv_bytepd_amortized, weight_type>
-read_compressed_symmetric_graph(const char* fname, bool mmap) {
-  char* bytes;
+read_compressed_symmetric_graph(const char *fname, bool mmap) {
+  char *bytes;
   size_t bytes_size;
   std::tie(bytes, bytes_size) = parse_compressed_graph(fname, mmap);
 
-  long* sizes = (long*)bytes;
+  long *sizes = (long *)bytes;
   uint64_t n = sizes[0], m = sizes[1];
 
   gbbs_debug(uint64_t totalSpace = sizes[2];
-        std::cout << "# n = " << n << " m = " << m
-                  << " totalSpace = " << totalSpace << "\n");
+             std::cout << "# n = " << n << " m = " << m
+                       << " totalSpace = " << totalSpace << "\n");
 
-  uintT* offsets = (uintT*)(bytes + 3 * sizeof(long));
+  uintT *offsets = (uintT *)(bytes + 3 * sizeof(long));
   uint64_t skip = 3 * sizeof(long) + (n + 1) * sizeof(intT);
-  uintE* Degrees = (uintE*)(bytes + skip);
+  uintE *Degrees = (uintE *)(bytes + skip);
   skip += n * sizeof(intE);
-  uchar* edges = (uchar*)(bytes + skip);
+  uchar *edges = (uchar *)(bytes + skip);
 
   auto v_data = gbbs::new_array_no_init<vertex_data>(n);
   parallel_for(0, n, [&](size_t i) {
@@ -253,45 +395,45 @@ read_compressed_symmetric_graph(const char* fname, bool mmap) {
       unmmap(bytes, bytes_size);
     };
   }
-  symmetric_graph<csv_bytepd_amortized, weight_type> G(v_data, n, m,
-                                                       std::move(deletion_fn), edges);
+  symmetric_graph<csv_bytepd_amortized, weight_type> G(
+      v_data, n, m, std::move(deletion_fn), edges);
   return G;
 }
 
 template <class weight_type>
 asymmetric_graph<cav_bytepd_amortized, weight_type>
-read_compressed_asymmetric_graph(const char* fname, bool mmap) {
-  char* bytes;
+read_compressed_asymmetric_graph(const char *fname, bool mmap) {
+  char *bytes;
   size_t bytes_size;
   std::tie(bytes, bytes_size) = parse_compressed_graph(fname, mmap);
 
-  long* sizes = (long*)bytes;
+  long *sizes = (long *)bytes;
   uint64_t n = sizes[0], m = sizes[1], totalSpace = sizes[2];
 
   gbbs_debug(std::cout << "# n = " << n << " m = " << m
-                  << " totalSpace = " << totalSpace << "\n");
+                       << " totalSpace = " << totalSpace << "\n");
 
-  uintT* offsets = (uintT*)(bytes + 3 * sizeof(long));
+  uintT *offsets = (uintT *)(bytes + 3 * sizeof(long));
   uint64_t skip = 3 * sizeof(long) + (n + 1) * sizeof(intT);
-  uintE* Degrees = (uintE*)(bytes + skip);
+  uintE *Degrees = (uintE *)(bytes + skip);
   skip += n * sizeof(intE);
-  uchar* edges = (uchar*)(bytes + skip);
+  uchar *edges = (uchar *)(bytes + skip);
 
-  uintT* inOffsets;
-  uchar* inEdges;
-  uintE* inDegrees;
+  uintT *inOffsets;
+  uchar *inEdges;
+  uintE *inDegrees;
 
   skip += totalSpace;
-  uchar* inData = (uchar*)(bytes + skip);
-  sizes = (long*)inData;
+  uchar *inData = (uchar *)(bytes + skip);
+  sizes = (long *)inData;
   gbbs_debug(size_t inTotalSpace = sizes[0];
-        std::cout << "# inTotalSpace = " << inTotalSpace << "\n";);
+             std::cout << "# inTotalSpace = " << inTotalSpace << "\n";);
   skip += sizeof(long);
-  inOffsets = (uintT*)(bytes + skip);
+  inOffsets = (uintT *)(bytes + skip);
   skip += (n + 1) * sizeof(uintT);
-  inDegrees = (uintE*)(bytes + skip);
+  inDegrees = (uintE *)(bytes + skip);
   skip += n * sizeof(uintE);
-  inEdges = (uchar*)(bytes + skip);
+  inEdges = (uchar *)(bytes + skip);
 
   auto v_data = gbbs::new_array_no_init<vertex_data>(n);
   auto v_in_data = gbbs::new_array_no_init<vertex_data>(n);
@@ -330,7 +472,7 @@ read_compressed_asymmetric_graph(const char* fname, bool mmap) {
 //     ...
 //     <edge m first endpoint> <edge m second endpoint> <edge m weight>
 template <class weight_type>
-std::vector<Edge<weight_type>> read_weighted_edge_list(const char* filename) {
+std::vector<Edge<weight_type>> read_weighted_edge_list(const char *filename) {
   std::ifstream file{filename};
   if (!file.is_open()) {
     std::cout << "ERROR: Unable to open file: " << filename << '\n';
@@ -356,7 +498,7 @@ std::vector<Edge<weight_type>> read_weighted_edge_list(const char* filename) {
 //     <edge 3 first endpoint> <edge 3 second endpoint>
 //     ...
 //     <edge m first endpoint> <edge m second endpoint>
-std::vector<Edge<gbbs::empty>> read_unweighted_edge_list(const char* filename);
+std::vector<Edge<gbbs::empty>> read_unweighted_edge_list(const char *filename);
 
 // Converts edge list into an asymmetric graph.
 //
@@ -366,8 +508,8 @@ std::vector<Edge<gbbs::empty>> read_unweighted_edge_list(const char* filename);
 // Duplicate edges and self-loop edges are removed. If there are multiple edges
 // between the same endpoints with different weights, an arbitrary one is kept.
 template <class weight_type>
-asymmetric_graph<asymmetric_vertex, weight_type> edge_list_to_asymmetric_graph(
-    const std::vector<Edge<weight_type>>& edge_list) {
+asymmetric_graph<asymmetric_vertex, weight_type>
+edge_list_to_asymmetric_graph(const std::vector<Edge<weight_type>> &edge_list) {
   using edge_type = typename asymmetric_vertex<weight_type>::edge_type;
 
   if (edge_list.empty()) {
@@ -379,39 +521,43 @@ asymmetric_graph<asymmetric_vertex, weight_type> edge_list_to_asymmetric_graph(
           edge_list.size(), [&](const size_t i) { return edge_list[i]; }));
   const size_t num_edges = out_edges.size();
   const size_t num_vertices = internal::get_num_vertices_from_edges(out_edges);
-  vertex_data* vertex_out_data =
+  vertex_data *vertex_out_data =
       internal::sorted_edges_to_vertex_data_array(num_vertices, out_edges);
 
   sequence<Edge<weight_type>> in_edges = parlay::map<Edge<weight_type>>(
-      out_edges, [&](const Edge<weight_type>& edge) {
+      out_edges, [&](const Edge<weight_type> &edge) {
         return Edge<weight_type>{edge.to, edge.from, edge.weight};
       });
-  constexpr auto compare_endpoints = [](const Edge<weight_type>& left,
-                                        const Edge<weight_type>& right) {
+  constexpr auto compare_endpoints = [](const Edge<weight_type> &left,
+                                        const Edge<weight_type> &right) {
     return std::tie(left.from, left.to) < std::tie(right.from, right.to);
   };
   parlay::sample_sort_inplace(make_slice(in_edges), compare_endpoints);
-  vertex_data* vertex_in_data =
+  vertex_data *vertex_in_data =
       internal::sorted_edges_to_vertex_data_array(num_vertices, in_edges);
 
-  edge_type* out_edges_array = gbbs::new_array_no_init<edge_type>(num_edges);
-  edge_type* in_edges_array = gbbs::new_array_no_init<edge_type>(num_edges);
+  edge_type *out_edges_array = gbbs::new_array_no_init<edge_type>(num_edges);
+  edge_type *in_edges_array = gbbs::new_array_no_init<edge_type>(num_edges);
   parallel_for(0, num_edges, [&](const size_t i) {
-    const Edge<weight_type>& out_edge = out_edges[i];
+    const Edge<weight_type> &out_edge = out_edges[i];
     out_edges_array[i] = std::make_tuple(out_edge.to, out_edge.weight);
-    const Edge<weight_type>& in_edge = in_edges[i];
+    const Edge<weight_type> &in_edge = in_edges[i];
     in_edges_array[i] = std::make_tuple(in_edge.to, in_edge.weight);
   });
 
   return asymmetric_graph<asymmetric_vertex, weight_type>{
-      vertex_out_data, vertex_in_data, num_vertices, num_edges,
+      vertex_out_data,
+      vertex_in_data,
+      num_vertices,
+      num_edges,
       [=]() {
         gbbs::free_array(vertex_out_data, num_vertices);
         gbbs::free_array(vertex_in_data, num_vertices);
         gbbs::free_array(out_edges_array, num_edges);
         gbbs::free_array(in_edges_array, num_edges);
       },
-      out_edges_array, in_edges_array};
+      out_edges_array,
+      in_edges_array};
 }
 
 // Converts a list of undirected edges into a symmetric graph.
@@ -422,8 +568,8 @@ asymmetric_graph<asymmetric_vertex, weight_type> edge_list_to_asymmetric_graph(
 // Duplicate edges and self-loop edges are removed. If there are multiple edges
 // between the same endpoints with different weights, an arbitrary one is kept.
 template <class weight_type>
-symmetric_graph<symmetric_vertex, weight_type> edge_list_to_symmetric_graph(
-    const std::vector<Edge<weight_type>>& edge_list) {
+symmetric_graph<symmetric_vertex, weight_type>
+edge_list_to_symmetric_graph(const std::vector<Edge<weight_type>> &edge_list) {
   using edge_type = typename symmetric_vertex<weight_type>::edge_type;
 
   if (edge_list.empty()) {
@@ -432,7 +578,7 @@ symmetric_graph<symmetric_vertex, weight_type> edge_list_to_symmetric_graph(
 
   sequence<Edge<weight_type>> edges_both_directions(2 * edge_list.size());
   parallel_for(0, edge_list.size(), [&](const size_t i) {
-    const Edge<weight_type>& edge = edge_list[i];
+    const Edge<weight_type> &edge = edge_list[i];
     edges_both_directions[2 * i] = edge;
     edges_both_directions[2 * i + 1] =
         Edge<weight_type>{edge.to, edge.from, edge.weight};
@@ -441,12 +587,12 @@ symmetric_graph<symmetric_vertex, weight_type> edge_list_to_symmetric_graph(
       internal::sort_and_dedupe(std::move(edges_both_directions));
   const size_t num_edges = edges.size();
   const size_t num_vertices = internal::get_num_vertices_from_edges(edges);
-  vertex_data* vertex_data =
+  vertex_data *vertex_data =
       internal::sorted_edges_to_vertex_data_array(num_vertices, edges);
 
-  edge_type* edges_array = gbbs::new_array_no_init<edge_type>(num_edges);
+  edge_type *edges_array = gbbs::new_array_no_init<edge_type>(num_edges);
   parallel_for(0, num_edges, [&](const size_t i) {
-    const Edge<weight_type>& edge = edges[i];
+    const Edge<weight_type> &edge = edges[i];
     edges_array[i] = std::make_tuple(edge.to, edge.weight);
   });
 
@@ -460,8 +606,8 @@ symmetric_graph<symmetric_vertex, weight_type> edge_list_to_symmetric_graph(
 }
 
 template <class weight_type>
-symmetric_graph<symmetric_vertex, weight_type> edge_list_to_symmetric_graph(
-    const edge_array<weight_type>& edge_list) {
+symmetric_graph<symmetric_vertex, weight_type>
+edge_list_to_symmetric_graph(const edge_array<weight_type> &edge_list) {
   using edge_type = typename symmetric_vertex<weight_type>::edge_type;
   using Edge = gbbs_io::Edge<weight_type>;
 
@@ -471,7 +617,7 @@ symmetric_graph<symmetric_vertex, weight_type> edge_list_to_symmetric_graph(
 
   sequence<Edge> edges_both_directions(2 * edge_list.E.size());
   parallel_for(0, edge_list.E.size(), [&](const size_t i) {
-    const auto& orig_edge = edge_list.E[i];
+    const auto &orig_edge = edge_list.E[i];
     Edge edge(std::get<0>(orig_edge), std::get<1>(orig_edge),
               std::get<2>(orig_edge));
     edges_both_directions[2 * i] = edge;
@@ -481,12 +627,12 @@ symmetric_graph<symmetric_vertex, weight_type> edge_list_to_symmetric_graph(
       internal::sort_and_dedupe(std::move(edges_both_directions));
   const size_t num_edges = edges.size();
   const size_t num_vertices = internal::get_num_vertices_from_edges(edges);
-  vertex_data* vertex_data =
+  vertex_data *vertex_data =
       internal::sorted_edges_to_vertex_data_array(num_vertices, edges);
 
-  edge_type* edges_array = gbbs::new_array_no_init<edge_type>(num_edges);
+  edge_type *edges_array = gbbs::new_array_no_init<edge_type>(num_edges);
   parallel_for(0, num_edges, [&](const size_t i) {
-    const Edge& edge = edges[i];
+    const Edge &edge = edges[i];
     edges_array[i] = std::make_tuple(edge.to, edge.weight);
   });
 
@@ -501,7 +647,7 @@ symmetric_graph<symmetric_vertex, weight_type> edge_list_to_symmetric_graph(
 
 // Write graph in adjacency graph format to file.
 template <class Graph>
-void write_graph_to_file(const char* filename, Graph& graph) {
+void write_graph_to_file(const char *filename, Graph &graph) {
   using weight_type = typename Graph::weight_type;
 
   std::ofstream file{filename};
@@ -515,9 +661,10 @@ void write_graph_to_file(const char* filename, Graph& graph) {
   const size_t num_vertices{graph.n};
   const size_t num_edges{graph.m};
 
-  sequence<size_t> offsets = sequence<size_t>::from_function(
-      num_vertices,
-      [&](const size_t i) { return graph.get_vertex(i).out_degree(); });
+  sequence<size_t> offsets =
+      sequence<size_t>::from_function(num_vertices, [&](const size_t i) {
+        return graph.get_vertex(i).out_degree();
+      });
   parlay::scan_inplace(make_slice(offsets));
 
   file << (is_weighted_graph ? internal::kWeightedAdjGraphHeader
@@ -535,46 +682,46 @@ void write_graph_to_file(const char* filename, Graph& graph) {
     }};
     graph.get_vertex(i).out_neighbors().map(print_neighbor, kParallel);
   }
-  if
-    constexpr(is_weighted_graph) {
-      for (size_t i = 0; i < num_vertices; i++) {
-        constexpr bool kParallel{false};
-        const auto print_weight{[&](uintE, uintE, const weight_type& weight) {
-          file << weight << '\n';
-        }};
-        graph.get_vertex(i).out_neighbors().map(print_weight, kParallel);
-      }
+  if constexpr (is_weighted_graph) {
+    for (size_t i = 0; i < num_vertices; i++) {
+      constexpr bool kParallel{false};
+      const auto print_weight{[&](uintE, uintE, const weight_type &weight) {
+        file << weight << '\n';
+      }};
+      graph.get_vertex(i).out_neighbors().map(print_weight, kParallel);
     }
+  }
 }
 
-namespace internal {  // Internal definitions
+namespace internal { // Internal definitions
 
 // For use in `static_assert(false)`. See
 // https://stackoverflow.com/a/53945549/4865149 .
-template <class...>
-constexpr std::false_type always_false{};
+template <class...> constexpr std::false_type always_false{};
 
 // Given a list of edges on a graph with vertex IDs {0, 1, 2, 3,..., n - 1},
 // return the minimal valid value of n.
 template <class weight_type>
-size_t get_num_vertices_from_edges(const sequence<Edge<weight_type>>& edges) {
-  const auto max_endpoints = parlay::delayed_seq<size_t>(
-      edges.size(),
-      [&](const size_t i) { return std::max(edges[i].from, edges[i].to); });
+size_t get_num_vertices_from_edges(const sequence<Edge<weight_type>> &edges) {
+  const auto max_endpoints =
+      parlay::delayed_seq<size_t>(edges.size(), [&](const size_t i) {
+        return std::max(edges[i].from, edges[i].to);
+      });
   return parlay::reduce_max(max_endpoints) + 1;
 }
 
 // Given a list of edges sorted by their first endpoint, return a corresponding
 // vertex_data array.
 template <class weight_type>
-vertex_data* sorted_edges_to_vertex_data_array(
-    const size_t num_vertices, const sequence<Edge<weight_type>>& edges) {
+vertex_data *
+sorted_edges_to_vertex_data_array(const size_t num_vertices,
+                                  const sequence<Edge<weight_type>> &edges) {
   if (edges.empty()) {
     return {};
   }
 
   const size_t num_edges = edges.size();
-  vertex_data* data = gbbs::new_array_no_init<vertex_data>(num_vertices);
+  vertex_data *data = gbbs::new_array_no_init<vertex_data>(num_vertices);
   parallel_for(0, edges[0].from + 1,
                [&](const size_t j) { data[j].offset = 0; });
   parallel_for(1, num_edges, [&](const size_t i) {
@@ -597,13 +744,12 @@ vertex_data* sorted_edges_to_vertex_data_array(
   return data;
 }
 
-template <class weight_type>
-weight_type string_to_weight(const char* str) {
-  if
-    constexpr(std::is_integral<weight_type>::value) { return atol(str); }
-  else if
-    constexpr(std::is_floating_point<weight_type>::value) { return atof(str); }
-  else {
+template <class weight_type> weight_type string_to_weight(const char *str) {
+  if constexpr (std::is_integral<weight_type>::value) {
+    return atol(str);
+  } else if constexpr (std::is_floating_point<weight_type>::value) {
+    return atof(str);
+  } else {
     static_assert(always_false<weight_type>,
                   "Converting a char* to weight_type is not supported");
   }
@@ -613,13 +759,13 @@ weight_type string_to_weight(const char* str) {
  * vertices, edges, the vertex offsets, and the edge values, after
  * parsing the input (weighted) graph file. */
 template <class weight_type>
-std::tuple<size_t, size_t, uintT*, std::tuple<uintE, weight_type>*>
-parse_weighted_graph(const char* fname, bool mmap, bool binary, char* bytes,
+std::tuple<size_t, size_t, uintT *, std::tuple<uintE, weight_type> *>
+parse_weighted_graph(const char *fname, bool mmap, bool binary, char *bytes,
                      size_t bytes_size) {
   using id_and_weight = std::tuple<uintE, weight_type>;
 
-  uintT* offsets;
-  id_and_weight* edges;
+  uintT *offsets;
+  id_and_weight *edges;
   uint64_t n, m;
 
   sequence<char> S;
@@ -627,7 +773,7 @@ parse_weighted_graph(const char* fname, bool mmap, bool binary, char* bytes,
   if (!binary) {
     if (bytes == nullptr) {
       if (mmap) {
-        std::pair<char*, size_t> MM = mmapStringFromFile(fname);
+        std::pair<char *, size_t> MM = mmapStringFromFile(fname);
         S = sequence<char>(MM.second);
         // Cannot mutate the graph unless we copy.
         parallel_for(0, S.size(), [&](size_t i) { S[i] = MM.first[i]; });
@@ -641,8 +787,9 @@ parse_weighted_graph(const char* fname, bool mmap, bool binary, char* bytes,
     }
     auto tokens = parlay::map_tokens(
         parlay::make_slice(S), [](auto x) { return parlay::make_slice(x); });
-    gbbs_debug(std::string header = std::string(tokens[0].begin(), tokens[0].size());
-          assert(header == internal::kWeightedAdjGraphHeader););
+    gbbs_debug(std::string header =
+                   std::string(tokens[0].begin(), tokens[0].size());
+               assert(header == internal::kWeightedAdjGraphHeader););
 
     uint64_t len = tokens.size() - 1;
 
@@ -653,7 +800,7 @@ parse_weighted_graph(const char* fname, bool mmap, bool binary, char* bytes,
       std::cout << "len = " << len << "\n";
       std::cout << "n = " << n << " m = " << m << "\n";
       std::cout << "should be : " << (n + 2 * m + 2) << "\n";
-      assert(false);  // invalid format
+      assert(false); // invalid format
     }
 
     offsets = gbbs::new_array_no_init<uintT>(n + 1);
@@ -665,7 +812,7 @@ parse_weighted_graph(const char* fname, bool mmap, bool binary, char* bytes,
     });
     offsets[n] = m; /* make sure to set the last offset */
     parallel_for(0, m, [&](size_t i) {
-      auto& wgh = tokens[i + n + m + 3];
+      auto &wgh = tokens[i + n + m + 3];
       auto wgh_str = std::string(wgh.begin(), wgh.size());
       edges[i] = std::make_tuple(
           parlay::internal::chars_to_int_t<uintE>(tokens[i + n + 3]),
@@ -674,15 +821,15 @@ parse_weighted_graph(const char* fname, bool mmap, bool binary, char* bytes,
     S.clear();
     tokens.clear();
   } else {
-    std::pair<char*, size_t> MM = mmapStringFromFile(fname);
+    std::pair<char *, size_t> MM = mmapStringFromFile(fname);
     auto mmap_file = MM.first;
 
-    long* sizes = (long*)mmap_file;
+    long *sizes = (long *)mmap_file;
     n = sizes[0], m = sizes[1];
 
-    offsets = (uintT*)(mmap_file + 3 * sizeof(long));
+    offsets = (uintT *)(mmap_file + 3 * sizeof(long));
     uint64_t skip = 3 * sizeof(long) + (n + 1) * sizeof(intT);
-    edges = (id_and_weight*)(mmap_file + skip);
+    edges = (id_and_weight *)(mmap_file + skip);
   }
   return std::make_tuple(n, m, offsets, edges);
 }
@@ -690,11 +837,11 @@ parse_weighted_graph(const char* fname, bool mmap, bool binary, char* bytes,
 template <class weight_type>
 sequence<Edge<weight_type>> sort_and_dedupe(sequence<Edge<weight_type>> edges) {
   constexpr auto compare_endpoints{
-      [](const Edge<weight_type>& left, const Edge<weight_type>& right) {
+      [](const Edge<weight_type> &left, const Edge<weight_type> &right) {
         return std::tie(left.from, left.to) < std::tie(right.from, right.to);
       }};
   constexpr auto unequal_endpoints{
-      [](const Edge<weight_type>& left, const Edge<weight_type>& right) {
+      [](const Edge<weight_type> &left, const Edge<weight_type> &right) {
         return std::tie(left.from, left.to) != std::tie(right.from, right.to);
       }};
   parlay::sample_sort_inplace(make_slice(edges), compare_endpoints);
@@ -707,7 +854,7 @@ sequence<Edge<weight_type>> sort_and_dedupe(sequence<Edge<weight_type>> edges) {
       }));
 }
 
-}  // namespace internal
+} // namespace internal
 
-}  // namespace gbbs_io
-}  // namespace gbbs
+} // namespace gbbs_io
+} // namespace gbbs
