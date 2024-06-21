@@ -35,13 +35,17 @@
 
 #define WEIGHTED 1
 
+#include "gbbs/source.h"
+
 #include "DeltaStepping.h"
 
 namespace gbbs {
 
-template <class Graph>
-double DeltaStepping_runner(Graph& G, commandLine P) {
+template <class Graph> double DeltaStepping_runner(Graph &G, commandLine P) {
+  static SourcePicker<Graph> sp(G, true);
   uintE src = P.getOptionLongValue("-src", 0);
+  if (src == 0)
+    src = sp.PickNext();
   size_t num_buckets = P.getOptionLongValue("-nb", 32);
   size_t delta = P.getOptionLongValue("-delta", 1);
 
@@ -50,7 +54,8 @@ double DeltaStepping_runner(Graph& G, commandLine P) {
   std::cout << "### Threads: " << num_workers() << std::endl;
   std::cout << "### n: " << G.n << std::endl;
   std::cout << "### m: " << G.m << std::endl;
-  std::cout << "### Params: -src = " << src << " -delta = " << delta << " -nb (num_buckets) = " << num_buckets << std::endl;
+  std::cout << "### Params: -src = " << src << " -delta = " << delta
+            << " -nb (num_buckets) = " << num_buckets << std::endl;
   std::cout << "### ------------------------------------" << std::endl;
 
   if (num_buckets != (((uintE)1) << pbbslib::log2_up(num_buckets))) {
@@ -58,7 +63,8 @@ double DeltaStepping_runner(Graph& G, commandLine P) {
               << "\n";
     exit(-1);
   }
-  timer t; t.start();
+  timer t;
+  t.start();
   DeltaStepping(G, src, delta, num_buckets);
   double tt = t.stop();
 
@@ -66,6 +72,6 @@ double DeltaStepping_runner(Graph& G, commandLine P) {
   return tt;
 }
 
-}  // namespace gbbs
+} // namespace gbbs
 
 generate_weighted_main(gbbs::DeltaStepping_runner, false);

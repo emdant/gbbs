@@ -146,9 +146,9 @@ struct symmetric_graph {
   }
 
 #ifndef SAGE
-  vertex get_vertex(uintE i) { return vertex(e0, v_data[i], i); }
+  vertex get_vertex(uintE i) const { return vertex(e0, v_data[i], i); }
 #else
-  vertex get_vertex(uintE i) {
+  vertex get_vertex(uintE i) const {
     if (pbbslib::numanode() == 0) {
       return vertex(e0, v_data[i], i);
     } else {
@@ -287,7 +287,7 @@ struct symmetric_ptr_graph {
   // Note that observers recieve a handle to a vertex object which is only valid
   // so long as this graph's memory is valid (i.e., before del() has been
   // called).
-  vertex get_vertex(uintE i) { return vertices[i]; }
+  vertex get_vertex(uintE i) const { return vertices[i]; }
 
   // number of vertices in G
   size_t n;
@@ -344,11 +344,11 @@ struct asymmetric_graph {
   edge_type* in_edges_1;
 
 #ifndef SAGE
-  vertex get_vertex(size_t i) {
+  vertex get_vertex(size_t i) const {
     return vertex(out_edges_0, v_out_data[i], in_edges_0, v_in_data[i], i);
   }
 #else
-  vertex get_vertex(size_t i) {
+  vertex get_vertex(size_t i) const {
     if (pbbslib::numanode() == 0) {
       return vertex(out_edges_0, v_out_data[i], in_edges_0, v_in_data[i], i);
     } else {
@@ -419,7 +419,7 @@ struct asymmetric_ptr_graph {
   // called to delete the graph
   std::function<void()> deletion_fn;
 
-  vertex get_vertex(size_t i) {
+  vertex get_vertex(size_t i) const {
     return vertices[i];
   }
 
