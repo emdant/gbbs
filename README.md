@@ -7,10 +7,6 @@ This repository contains code for our SPAA paper "Theoretically Efficient
 Parallel Graph Algorithms Can Be Fast and Scalable" (SPAA'18). It includes
 implementations of the following parallel graph algorithms:
 
-**Clustering Problems**
-* SCAN Graph Clustering
-* Graph-Based Hierarchical Agglomerative Clustering (Graph HAC)
-
 **Connectivity Problems**
 * Low-Diameter Decomposition
 * Connectivity
@@ -31,11 +27,7 @@ implementations of the following parallel graph algorithms:
 **Substructure Problems**
 * Triangle Counting
 * Approximate Densest Subgraph
-* k-Core (Coreness)
-* Degeneracy Ordering (Low-Outdegree Orientation)
-* k-Clique Counting
-* 5-Cycle Counting
-* k-Truss
+* k-Core (coreness)
 
 **Shortest Path Problems**
 * Unweighted SSSP (Breadth-First Search)
@@ -48,6 +40,12 @@ implementations of the following parallel graph algorithms:
 The code for these applications is located in the `benchmark` directory. The
 implementations are based on the Ligra/Ligra+/Julienne graph processing
 frameworks. The framework code is located in the `src` directory.
+
+The codes used here are still in development, and we plan to add more
+applications/benchmarks. We currently include the following extra codes,
+which are part of ongoing work.
+
+* experimental/KTruss
 
 If you use our work, please cite our [paper](https://arxiv.org/abs/1805.05208):
 
@@ -86,11 +84,11 @@ called bytepd_amortized (bytepda) is similar to the parallelByte format used in
 Ligra+, with some additional functionality to support efficiently packs,
 filters, and other operations over neighbor lists.
 
-To compile codes for graphs with more than 2^32 edges, the `GBBSLONG` command-line
+To compile codes for graphs with more than 2^32 edges, the `LONG` command-line
 parameter should be set. If the graph has more than 2^32 vertices, the
-`GBBSEDGELONG` command-line parameter should be set. Note that the codes have not
+`EDGELONG` command-line parameter should be set. Note that the codes have not
 been tested with more than 2^32 vertices, so if any issues arise please contact
-[Laxman Dhulipala](mailto:laxman@umd.edu).
+[Laxman Dhulipala](mailto:ldhulipa@cs.cmu.edu).
 
 To compile with the Cilk Plus scheduler instead of the Homegrown scheduler, use
 the Bazel configuration `--config=cilk`. To compile using OpenMP instead, use
@@ -100,9 +98,6 @@ environment variables `CILK`, `OPENMP`, or `SERIAL` respectively.)
 
 To build:
 ```sh
-# Load external libraries as submodules. (This only needs to be run once.)
-git submodule update --init
-
 # For Bazel:
 $ bazel build  //...  # compiles all benchmarks
 
@@ -197,9 +192,9 @@ Running code on binary-encoded graphs
 We make use of a binary-graph format in our benchmark. The binary representation
 stores the representation we use for in-memory processing (compressed sparse row)
 directly on disk, which enables applications to avoid string-conversion overheads
-associated with the adjacency graph format described below. We have provided a
+associated with the adjacency graph format described below. We have provided a 
 converter utility which takes as input an uncompressed graph (e.g., in adjacency
-graph format) and outputs this graph in the binary format. The converter can be
+graph format) and outputs this graph in the binary format. The converter can be 
 used as follows:
 
 ```sh
@@ -223,7 +218,7 @@ $ bazel run //benchmarks/BFS/NonDeterministicBFS:BFS_main -- -s -b -src 10 ~/gbb
 $ ./BFS -s -b -src 10 ../../../inputs/rMatGraph_J_5_100.binary
 ```
 
-Note that application performance will be affected if the file is not already
+Note that application performance will be affected if the file is not already 
 in the page-cache. We have found that using `-m` when the binary graph is backed
 by SSD or disk results in a slow first-run, followed by fast subsequent runs.
 

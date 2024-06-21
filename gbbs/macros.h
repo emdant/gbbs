@@ -23,16 +23,17 @@
 
 #pragma once
 
-#include "bridge.h"
 #include <limits.h>
+#include "bridge.h"
 
 namespace gbbs {
-#define GBBSLONG 1
+#define LONG 1
 
 #ifndef NDEBUG
-#define gbbs_debug(_body) _body;
+#define debug(_body) \
+  _body;
 #else
-#define gbbs_debug(_body)
+#define debug(_body)
 #endif
 
 typedef unsigned int uint;
@@ -40,10 +41,10 @@ typedef unsigned long ulong;
 
 // size of edge-offsets.
 // If the number of edges is more than sizeof(MAX_UINT),
-// you should set the GBBSLONG flag on the command line.
-#if defined(GBBSLONG)
-typedef int64_t intT;
-typedef uint64_t uintT;
+// you should set the LONG flag on the command line.
+#if defined(LONG)
+typedef long intT;
+typedef unsigned long uintT;
 #define INT_T_MAX LONG_MAX
 #define UINT_T_MAX ULONG_MAX
 #else
@@ -55,22 +56,22 @@ typedef unsigned int uintT;
 
 // edge size macros.
 // If the number of vertices is more than sizeof(MAX_UINT)
-// you should set the GBBSEDGELONG flag on the command line.
-#if defined(GBBSEDGELONG)
+// you should set the EDGELONG flag on the command line.
+#if defined(EDGELONG)
 typedef long intE;
 typedef unsigned long uintE;
 #define INT_E_MAX LONG_MAX
 #define UINT_E_MAX ULONG_MAX
 #else
-typedef int32_t intE;
-typedef uint32_t uintE;
+typedef int intE;
+typedef unsigned int uintE;
 #define INT_E_MAX INT_MAX
 #define UINT_E_MAX UINT_MAX
 #endif
 
 struct vertex_data {
   size_t offset; // offset into the edges (static)
-  uintE degree;  // possibly decreased by a (mutable) algorithm.
+  uintE degree; // possibly decreased by a (mutable) algorithm.
 };
 
 // Default granularity of a parallel for loop.
@@ -102,4 +103,4 @@ typedef unsigned char uchar;
 #define compression bytepd
 #endif
 #endif
-} // namespace gbbs
+}  // namespace gbbs

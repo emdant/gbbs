@@ -40,7 +40,7 @@ struct BFS_F {
     }
   }
   inline bool updateAtomic(uintE s, uintE d, W w) {
-    return (gbbs::atomic_compare_and_swap(&Parents[d], UINT_E_MAX, s));
+    return (pbbslib::atomic_compare_and_swap(&Parents[d], UINT_E_MAX, s));
   }
   inline bool cond(uintE d) { return (Parents[d] == UINT_E_MAX); }
 };
@@ -49,8 +49,7 @@ template <class Graph>
 inline sequence<uintE> BFS(Graph& G, uintE src) {
   using W = typename Graph::weight_type;
   /* Creates Parents array, initialized to all -1, except for src. */
-  auto Parents =
-      sequence<uintE>::from_function(G.n, [&](size_t i) { return UINT_E_MAX; });
+  auto Parents = sequence<uintE>(G.n, [&](size_t i) { return UINT_E_MAX; });
   Parents[src] = src;
 
   vertexSubset Frontier(G.n, src);
@@ -58,8 +57,7 @@ inline sequence<uintE> BFS(Graph& G, uintE src) {
   while (!Frontier.isEmpty()) {
     std::cout << Frontier.size() << "\n";
     reachable += Frontier.size();
-    Frontier = edgeMap(G, Frontier, BFS_F<W>(Parents.begin()), -1,
-                       sparse_blocked | dense_parallel);
+    Frontier = edgeMap(G, Frontier, BFS_F<W>(Parents.begin()), -1, sparse_blocked | dense_parallel);
   }
   std::cout << "Reachable: " << reachable << "\n";
   return Parents;

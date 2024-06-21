@@ -1,9 +1,3 @@
-licenses(["notice"])
-
-package(
-    default_visibility = ["//visibility:public"],
-)
-
 cc_library(
     name = "scan",
     srcs = [
@@ -22,7 +16,12 @@ cc_library(
         "//gbbs:bridge",
         "//gbbs:graph",
         "//gbbs:macros",
-        "//gbbs/helpers:sparse_table",
+        "//gbbs/pbbslib:sparse_table",
+        "//pbbslib:binary_search",
+        "//pbbslib:get_time",
+        "//pbbslib:sample_sort",
+        "//pbbslib:seq",
+        "//pbbslib:utilities",
     ],
 )
 
@@ -40,9 +39,14 @@ cc_library(
         "//benchmarks/TriangleCounting/ShunTangwongsan15:Triangle",
         "//gbbs:bridge",
         "//gbbs:graph_mutation",
-        "//gbbs:macros",
         "//gbbs:vertex",
-        "//gbbs/helpers:assert",
+        "//pbbslib:assert",
+        "//pbbslib:binary_search",
+        "//pbbslib:monoid",
+        "//pbbslib:random",
+        "//pbbslib:seq",
+        "//pbbslib:sequence_ops",
+        "//pbbslib:utilities",
     ],
 )
 
@@ -59,6 +63,9 @@ cc_library(
         "//gbbs:bridge",
         "//gbbs:graph",
         "//gbbs:macros",
+        "//pbbslib:integer_sort",
+        "//pbbslib:monoid",
+        "//pbbslib:seq",
     ],
 )
 

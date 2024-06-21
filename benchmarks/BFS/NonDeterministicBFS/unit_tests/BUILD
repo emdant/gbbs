@@ -1,10 +1,4 @@
-licenses(["notice"])
-
 load("//internal_tools:build_defs.bzl", "gbbs_cc_test")
-
-package(
-    default_visibility = ["//visibility:public"],
-)
 
 gbbs_cc_test(
     name = "test_bfs",
@@ -12,8 +6,8 @@ gbbs_cc_test(
     deps = [
         "//benchmarks/BFS/NonDeterministicBFS:BFS",
         "//gbbs:graph",
+        "//gbbs:graph_test_utils",
         "//gbbs:macros",
-        "//gbbs/unit_tests:graph_test_utils",
         "@googletest//:gtest_main",
     ],
 )

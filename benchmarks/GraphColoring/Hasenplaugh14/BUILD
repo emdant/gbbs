@@ -1,19 +1,18 @@
-licenses(["notice"])
-
-package(
-    default_visibility = ["//visibility:public"],
-)
-
 cc_library(
-    name = "GraphColoring",
-    hdrs = ["GraphColoring.h"],
-    deps = [
-        "//gbbs",
-    ],
+  name = "GraphColoring",
+  hdrs = ["GraphColoring.h"],
+  deps = [
+  "//gbbs:gbbs",
+  "//pbbslib:random_shuffle"
+  ]
 )
 
 cc_binary(
-    name = "GraphColoring_main",
-    srcs = ["GraphColoring.cc"],
-    deps = [":GraphColoring"],
+  name = "GraphColoring_main",
+  srcs = ["GraphColoring.cc"],
+  deps = [":GraphColoring"]
+)
+
+package(
+  default_visibility = ["//visibility:public"],
 )

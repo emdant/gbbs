@@ -1,9 +1,3 @@
-licenses(["notice"])
-
-package(
-    default_visibility = ["//visibility:public"],
-)
-
 cc_library(
     name = "scan",
     srcs = [
@@ -18,8 +12,11 @@ cc_library(
         "//gbbs",
         "//gbbs:graph",
         "//gbbs:macros",
+        "//gbbs:undirected_edge",
         "//gbbs:vertex_subset",
-        "//gbbs/helpers:sparse_table",
-        "//gbbs/helpers:undirected_edge",
+        "//gbbs/pbbslib:sparse_table",
+        "//pbbslib:seq",
+        "//pbbslib:stlalgs",
+        "//pbbslib:utilities",
     ],
 )

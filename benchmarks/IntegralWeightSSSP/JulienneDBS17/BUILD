@@ -1,20 +1,18 @@
-licenses(["notice"])
-
-package(
-    default_visibility = ["//visibility:public"],
-)
-
 cc_library(
-    name = "wBFS",
-    hdrs = ["wBFS.h"],
-    deps = [
-        "//gbbs",
-        "//gbbs:bucket",
-    ],
+  name = "wBFS",
+  hdrs = ["wBFS.h"],
+  deps = [
+  "//gbbs:gbbs",
+  "//gbbs:bucket",
+  ]
 )
 
 cc_binary(
-    name = "wBFS_main",
-    srcs = ["wBFS.cc"],
-    deps = [":wBFS"],
+  name = "wBFS_main",
+  srcs = ["wBFS.cc"],
+  deps = [":wBFS"]
+)
+
+package(
+  default_visibility = ["//visibility:public"],
 )

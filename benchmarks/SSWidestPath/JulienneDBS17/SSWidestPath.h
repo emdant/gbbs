@@ -36,8 +36,7 @@ struct Visit_F {
   sequence<uintE>& width;
   Visit_F(sequence<uintE>& _width) : width(_width) {}
 
-  inline std::optional<uintE> update(const uintE& s, const uintE& d,
-                                     const intE& w) {
+  inline std::optional<uintE> update(const uintE& s, const uintE& d, const intE& w) {
     uintE oval = width[d];
     uintE bottleneck = oval | TOP_BIT;
     uintE n_width = std::min((width[s] | TOP_BIT), (w | TOP_BIT));
@@ -52,17 +51,16 @@ struct Visit_F {
   }
 
   inline std::optional<uintE> updateAtomic(const uintE& s, const uintE& d,
-                                           const intE& w) {
+                                   const intE& w) {
     uintE oval = width[d];
     uintE bottleneck = oval | TOP_BIT;
     uintE n_width = std::min((width[s] | TOP_BIT), (w | TOP_BIT));
     if (n_width > bottleneck) {
       if (!(oval & TOP_BIT) &&
-          gbbs::atomic_compare_and_swap(&(width[d]), oval,
-                                        n_width)) {  // First visitor
+          pbbslib::atomic_compare_and_swap(&(width[d]), oval, n_width)) {  // First visitor
         return std::optional<uintE>(oval);
       }
-      gbbs::write_max(&(width[d]), n_width);
+      pbbslib::write_max(&(width[d]), n_width);
     }
     return std::nullopt;
   }
@@ -74,47 +72,39 @@ struct Visit_F {
 
 template <class Graph>
 inline sequence<uintE> SSWidestPath(Graph& G, uintE src,
-                                    size_t num_buckets = 128,
-                                    bool largemem = false,
-                                    bool no_blocked = false) {
+                              size_t num_buckets = 128, bool largemem = false,
+                              bool no_blocked = false) {
   using W = typename Graph::weight_type;
   timer t;
   t.start();
 
-  timer mw;
-  mw.start();
+  timer mw; mw.start();
   W max_weight = (W)0;
-  parallel_for(0, G.n, 1, [&](size_t i) {
-    auto map_f = [&](const uintE& u, const uintE& v, const W& wgh) {
+  parallel_for(0, G.n, [&] (size_t i) {
+    auto map_f = [&] (const uintE& u, const uintE& v, const W& wgh) {
       if (wgh > max_weight) {
-        gbbs::write_max(&max_weight, wgh);
+        pbbslib::write_max(&max_weight, wgh);
       }
     };
     G.get_vertex(i).out_neighbors().map(map_f);
-  });
-  mw.stop();
-  mw.next("max weight time");
+  }, 1);
+  mw.stop(); mw.reportTotal("max weight time");
   std::cout << "max_weight = " << max_weight << std::endl;
 
   timer init;
   init.start();
   size_t n = G.n;
 
-  auto width =
-      sequence<uintE>::from_function(n, [&](size_t i) { return (uintE)0; });
+  auto width = sequence<uintE>(n, [&](size_t i) { return (uintE)0; });
   width[src] = INT_E_MAX;
 
   auto get_bkt = [&](const W& _width) -> uintE {
     return max_weight - _width + 1;
   };
-  auto get_ring = parlay::delayed_seq<uintE>(n, [&](const size_t& v) -> uintE {
+  auto get_ring = pbbslib::make_sequence<uintE>(n, [&](const size_t& v) -> uintE {
     auto d = width[v];
-    if (d == 0) {
-      return UINT_E_MAX;
-    }
-    if (d == INT_E_MAX) {
-      return 0;
-    }
+    if (d == 0) { return UINT_E_MAX; }
+    if (d == INT_E_MAX) { return 0; }
     return get_bkt(d);
   });
   std::cout << "creating bucket" << std::endl;
@@ -132,7 +122,7 @@ inline sequence<uintE> SSWidestPath(Graph& G, uintE src,
   };
 
   init.stop();
-  init.next("init time");
+  init.reportTotal("init time");
   timer bt, emt;
   auto bkt = b.next_bucket();
   size_t rd = 0;
@@ -157,28 +147,23 @@ inline sequence<uintE> SSWidestPath(Graph& G, uintE src,
     bt.stop();
     rd++;
   }
-  bt.next("bucket time");
-  emt.next("edge map time");
+  bt.reportTotal("bucket time");
+  emt.reportTotal("edge map time");
   std::cout << "n rounds = " << rd << "\n";
 
-  auto dist_im_f = [&](size_t i) {
-    return ((width[i] == INT_E_MAX) || (width[i] == (uintE)(-1))) ? 0
-                                                                  : width[i];
-  };  // noop?
-  auto dist_im = parlay::delayed_seq<size_t>(n, dist_im_f);
-  std::cout << "max dist = " << parlay::reduce_max(dist_im)
-            << " xor = " << parlay::reduce_xor(dist_im) << "\n";
+  auto dist_im_f = [&](size_t i) { return ((width[i] == INT_E_MAX) || (width[i] == (uintE)(-1))) ? 0 : width[i]; }; // noop?
+  auto dist_im = pbbslib::make_sequence<size_t>(n, dist_im_f);
+  std::cout << "max dist = " << pbbslib::reduce_max(dist_im) << " xor = " << pbbslib::reduce_xor(dist_im) << "\n";
   return width;
 }
 
 struct SSWidestPathBF_F {
   intE* width;
   intE* Visited;
-  SSWidestPathBF_F(intE* _width, intE* _Visited)
-      : width(_width), Visited(_Visited) {}
+  SSWidestPathBF_F(intE* _width, intE* _Visited) : width(_width), Visited(_Visited) {}
   inline bool update(const uintE& s, const uintE& d, const intE& edgeLen) {
-    intE n_width = std::min(width[s], edgeLen);  // new width of this path.
-    if (width[d] > n_width) {  // update width to d if it becomes higher
+    intE n_width = std::min(width[s], edgeLen); // new width of this path.
+    if (width[d] > n_width) { // update width to d if it becomes higher
       width[d] = n_width;
       if (Visited[d] == 0) {
         Visited[d] = 1;
@@ -190,8 +175,7 @@ struct SSWidestPathBF_F {
   inline bool updateAtomic(const uintE& s, const uintE& d,
                            const intE& edgeLen) {
     intE n_width = std::min(width[s], edgeLen);
-    return (gbbs::write_max(&width[d], n_width) &&
-            gbbs::atomic_compare_and_swap(&Visited[d], 0, 1));
+    return (pbbslib::write_max(&width[d], n_width) && pbbslib::atomic_compare_and_swap(&Visited[d], 0, 1));
   }
   inline bool cond(uintE d) { return cond_true(d); }
 };
@@ -212,19 +196,19 @@ inline sequence<intE> SSWidestPathBF(Graph& G, const uintE& start) {
   size_t n = G.n;
   auto Visited = sequence<int>(n, 0);
   auto width = sequence<intE>(n, static_cast<intE>(-1));
-  width[start] = INT_E_MAX;  // width(s) = \infty
+  width[start] = INT_E_MAX; // width(s) = \infty
 
   vertexSubset Frontier(n, start);
   size_t round = 0;
   while (!Frontier.isEmpty()) {
     // Check for a negative weight cycle
     if (round == n) {
-      parallel_for(0, n, kDefaultGranularity,
-                   [&](size_t i) { width[i] = -(INT_E_MAX / 2); });
+      par_for(0, n, kDefaultGranularity, [&] (size_t i)
+                      { width[i] = -(INT_E_MAX / 2); });
       break;
     }
-    auto em_f = wrap_with_default<W, intE>(
-        SSWidestPathBF_F(width.begin(), Visited.begin()), (intE)1);
+    auto em_f =
+        wrap_with_default<W, intE>(SSWidestPathBF_F(width.begin(), Visited.begin()), (intE)1);
     auto output =
         edgeMap(G, Frontier, em_f, G.m / 10, sparse_blocked | dense_forward);
     vertexMap(output, SSWidestPath_BF_Vertex_F(Visited.begin()));
@@ -232,14 +216,9 @@ inline sequence<intE> SSWidestPathBF(Graph& G, const uintE& start) {
     Frontier = std::move(output);
     round++;
   }
-  auto dist_im_f = [&](size_t i) {
-    return ((width[i] == INT_E_MAX) || (width[i] == static_cast<intE>(-1)))
-               ? 0
-               : width[i];
-  };  // noop?
-  auto dist_im = parlay::delayed_seq<size_t>(n, dist_im_f);
-  std::cout << "max dist = " << parlay::reduce_max(dist_im)
-            << " xor = " << parlay::reduce_xor(dist_im) << "\n";
+  auto dist_im_f = [&](size_t i) { return ((width[i] == INT_E_MAX) || (width[i] == static_cast<intE>(-1))) ? 0 : width[i]; }; // noop?
+  auto dist_im = pbbslib::make_sequence<size_t>(n, dist_im_f);
+  std::cout << "max dist = " << pbbslib::reduce_max(dist_im) << " xor = " << pbbslib::reduce_xor(dist_im) << "\n";
   std::cout << "n rounds = " << round << "\n";
   return width;
 }

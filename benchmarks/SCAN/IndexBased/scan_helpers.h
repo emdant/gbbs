@@ -8,6 +8,9 @@
 
 #include "benchmarks/SCAN/IndexBased/similarity_measure.h"
 #include "gbbs/graph.h"
+#include "pbbslib/get_time.h"
+#include "pbbslib/sample_sort.h"
+#include "pbbslib/seq.h"
 
 namespace gbbs {
 namespace indexed_scan {
@@ -26,29 +29,32 @@ class NeighborOrder {
   //
   // The neighbor lists for each vertex in the graph must be sorted by ascending
   // neighbor ID.
-  template <template <typename> class VertexTemplate, typename Weight,
-            class SimilarityMeasure>
-  NeighborOrder(symmetric_graph<VertexTemplate, Weight>* graph,
-                const SimilarityMeasure& similarity_measure);
+  template <
+    template <typename> class VertexTemplate,
+    typename Weight,
+    class SimilarityMeasure>
+  NeighborOrder(
+      symmetric_graph<VertexTemplate, Weight>* graph,
+      const SimilarityMeasure& similarity_measure);
 
   NeighborOrder();
 
   // Get all similarity scores from vertex `source` to its neighbors (not
   // including `source` itself), sorted by descending similarity.
-  const gbbs::slice<EdgeSimilarity>& operator[](size_t source) const;
+  const pbbslib::range<EdgeSimilarity*>& operator[](size_t source) const;
 
   bool empty() const;
   // Returns the number of vertices.
   size_t size() const;
 
-  const gbbs::slice<EdgeSimilarity>* begin() const;
-  const gbbs::slice<EdgeSimilarity>* end() const;
+  pbbslib::range<EdgeSimilarity*>* begin() const;
+  pbbslib::range<EdgeSimilarity*>* end() const;
 
  private:
   // Holds similarity scores for all edges, sorted by source and then by
   // similarity.
   sequence<EdgeSimilarity> similarities_;
-  sequence<gbbs::slice<EdgeSimilarity>> similarities_by_source_;
+  sequence<pbbslib::range<EdgeSimilarity*>> similarities_by_source_;
 };
 
 struct CoreThreshold {
@@ -76,30 +82,33 @@ class CoreOrder {
 // SCAN_DETAILED_TIMES is defined, otherwise does nothing.
 void ReportTime(const timer&);
 
-template <template <typename> class VertexTemplate, typename Weight,
-          class SimilarityMeasure>
-NeighborOrder::NeighborOrder(symmetric_graph<VertexTemplate, Weight>* graph,
-                             const SimilarityMeasure& similarity_measure) {
+template <
+  template <typename> class VertexTemplate,
+  typename Weight,
+  class SimilarityMeasure>
+NeighborOrder::NeighborOrder(
+    symmetric_graph<VertexTemplate, Weight>* graph,
+    const SimilarityMeasure& similarity_measure) {
   timer function_timer{"Construct neighbor order"};
   similarities_ = similarity_measure.AllEdges(graph);
-  parlay::sample_sort_inplace(
-      make_slice(similarities_),
+  pbbslib::sample_sort_inplace(
+      similarities_.slice(),
       [](const EdgeSimilarity& left, const EdgeSimilarity& right) {
         // Sort by ascending source, then descending similarity.
         return std::tie(left.source, right.similarity) <
-               std::tie(right.source, left.similarity);
+          std::tie(right.source, left.similarity);
       });
-  sequence<uintT> vertex_offsets = sequence<uintT>::from_function(
+  sequence<uintT> vertex_offsets{
       graph->n,
-      [&](const size_t i) { return graph->get_vertex(i).out_degree(); });
-  parlay::scan_inplace(vertex_offsets);
-  similarities_by_source_ =
-      sequence<gbbs::slice<EdgeSimilarity>>::from_function(
-          graph->n, [&](const size_t i) {
-            return similarities_.cut(vertex_offsets[i],
-                                     i + 1 == graph->n ? similarities_.size()
-                                                       : vertex_offsets[i + 1]);
-          });
+      [&](const size_t i) { return graph->get_vertex(i).out_degree(); }};
+  pbbslib::scan_add_inplace(vertex_offsets);
+  similarities_by_source_ = sequence<pbbslib::range<EdgeSimilarity*>>(
+      graph->n,
+      [&](const size_t i) {
+        return similarities_.slice(
+          vertex_offsets[i],
+          i + 1 == graph->n ? similarities_.size() : vertex_offsets[i + 1]);
+      });
   internal::ReportTime(function_timer);
 }
 

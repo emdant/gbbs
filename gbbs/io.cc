@@ -5,27 +5,18 @@
 #else
 #include <malloc.h>
 #endif
-#include <cmath>
-#include <fstream>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cmath>
+#include <fstream>
 
 namespace gbbs {
 namespace gbbs_io {
 
-#ifdef PARLAY_USE_STD_ALLOC
-__mallopt::__mallopt() {
-  mallopt(M_MMAP_MAX, 0);
-  mallopt(M_TRIM_THRESHOLD, -1);
-}
-
-__mallopt __mallopt_var = __mallopt();
-#endif
-
 // returns a pointer and a length
-std::pair<char *, size_t> mmapStringFromFile(const char *filename) {
+std::pair<char*, size_t> mmapStringFromFile(const char* filename) {
   struct stat sb;
   int fd = open(filename, O_RDONLY);
   if (fd == -1) {
@@ -40,8 +31,8 @@ std::pair<char *, size_t> mmapStringFromFile(const char *filename) {
     perror("not a file\n");
     exit(-1);
   }
-  char *p =
-      static_cast<char *>(mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
+  char* p =
+      static_cast<char*>(mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
   if (p == MAP_FAILED) {
     perror("mmap");
     exit(-1);
@@ -54,20 +45,20 @@ std::pair<char *, size_t> mmapStringFromFile(const char *filename) {
   return std::make_pair(p, n);
 }
 
-void unmmap(const char *bytes, size_t bytes_size) {
+void unmmap(const char* bytes, size_t bytes_size) {
   if (bytes) {
-    const void *b = bytes;
-    if (munmap(const_cast<void *>(b), bytes_size) == -1) {
+    const void* b = bytes;
+    if (munmap(const_cast<void*>(b), bytes_size) == -1) {
       perror("munmap");
       exit(-1);
     }
   }
 }
 
-sequence<char> readStringFromFile(const char *fileName) {
+sequence<char> readStringFromFile(const char* fileName) {
   std::ifstream file(fileName, std::ios::in | std::ios::binary | std::ios::ate);
   if (!file.is_open()) {
-    gbbs_debug(std::cout << "# Unable to open file: " << fileName << "\n";);
+    debug(std::cout << "# Unable to open file: " << fileName << "\n";);
     abort();
   }
   uint64_t end = file.tellg();
@@ -79,7 +70,7 @@ sequence<char> readStringFromFile(const char *fileName) {
   return bytes;
 }
 
-std::tuple<char *, size_t> read_o_direct(const char *fname) {
+std::tuple<char*, size_t> read_o_direct(const char* fname) {
   /* read using O_DIRECT, which bypasses caches. */
   int fd;
 #if defined(__APPLE__)
@@ -87,7 +78,8 @@ std::tuple<char *, size_t> read_o_direct(const char *fname) {
 #else
   if ((fd = open(fname, O_RDONLY | O_DIRECT)) != -1) {
 #endif
-    gbbs_debug(std::cout << "# input opened!" << "\n";);
+    debug(std::cout << "# input opened!"
+              << "\n";);
   } else {
     std::cout << "# can't open input file!";
   }
@@ -96,49 +88,53 @@ std::tuple<char *, size_t> read_o_direct(const char *fname) {
   size_t fsize = lseek(fd, 0, SEEK_END);
   lseek(fd, 0, 0);
 
-/* allocate properly memaligned buffer for bytes */
+  /* allocate properly memaligned buffer for bytes */
 #if defined(__APPLE__)
-  char *bytes = NULL;
-  posix_memalign((void **)&bytes, 4096 * 2, fsize + 4096);
+  char* bytes = NULL;
+  posix_memalign((void**)&bytes, 4096 * 2, fsize + 4096);
 #else
-  char *bytes = (char *)memalign(4096 * 2, fsize + 4096);
+  char* bytes = (char*)memalign(4096 * 2, fsize + 4096);
 #endif
-  gbbs_debug(std::cout << "# fsize = " << fsize << "\n";);
+  debug(std::cout << "# fsize = " << fsize << "\n";);
 
   size_t sz = 0;
 
   size_t pgsize = getpagesize();
-  gbbs_debug(std::cout << "# pgsize = " << pgsize << "\n";);
+  debug(std::cout << "# pgsize = " << pgsize << "\n";);
 
   size_t read_size = 1024 * 1024 * 1024;
   if (sz + read_size > fsize) {
     size_t k = std::ceil((fsize - sz) / pgsize);
     read_size = std::max(k * pgsize, pgsize);
-    gbbs_debug(std::cout << "# set read size to: " << read_size << " "
-                         << (fsize - sz) << " bytes left" << "\n";);
+    debug(std::cout << "# set read size to: " << read_size << " " << (fsize - sz)
+              << " bytes left"
+              << "\n";);
   }
 
   while (sz + read_size < fsize) {
-    void *buf = bytes + sz;
-    gbbs_debug(std::cout << "# reading: " << read_size << "\n";);
+    void* buf = bytes + sz;
+    debug(std::cout << "# reading: " << read_size << "\n";);
     sz += read(fd, buf, read_size);
-    gbbs_debug(std::cout << "# read: " << sz << " bytes" << "\n";);
+    debug(std::cout << "# read: " << sz << " bytes"
+              << "\n";);
     if (sz + read_size > fsize) {
       size_t k = std::ceil((fsize - sz) / pgsize);
       read_size = std::max(k * pgsize, pgsize);
-      gbbs_debug(std::cout << "# set read size to: " << read_size << " "
-                           << (fsize - sz) << " bytes left" << "\n";);
+      debug(std::cout << "# set read size to: " << read_size << " " << (fsize - sz)
+                << " bytes left"
+                << "\n";);
     }
   }
   if (sz < fsize) {
-    gbbs_debug(std::cout << "# last read: rem = " << (fsize - sz) << "\n";);
-    void *buf = bytes + sz;
+    debug(std::cout << "# last read: rem = " << (fsize - sz) << "\n";);
+    void* buf = bytes + sz;
     sz += read(fd, buf, pgsize);
-    gbbs_debug(std::cout << "# read " << sz << " bytes " << "\n";);
+    debug(std::cout << "# read " << sz << " bytes "
+              << "\n";);
   }
   close(fd);
   return std::make_tuple(bytes, fsize);
 }
 
-} // namespace gbbs_io
-} // namespace gbbs
+}  // namespace gbbs_io
+}  // namespace gbbs

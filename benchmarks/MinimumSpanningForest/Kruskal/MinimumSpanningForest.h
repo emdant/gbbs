@@ -25,9 +25,15 @@
 
 #include <cassert>
 #include "gbbs/gbbs.h"
+#include "gbbs/union_find.h"
+#include "gbbs/pbbslib/dyn_arr.h"
 
-#include "benchmarks/Connectivity/UnionFind/union_find_rules.h"
 #include "benchmarks/Connectivity/common.h"
+#include "benchmarks/Connectivity/UnionFind/union_find_rules.h"
+
+#include "pbbslib/binary_search.h"
+#include "pbbslib/random.h"
+#include "pbbslib/sample_sort.h"
 
 namespace gbbs {
 namespace MinimumSpanningForest_kruskal {
@@ -35,60 +41,44 @@ namespace MinimumSpanningForest_kruskal {
 template <template <class W> class vertex, class W,
           typename std::enable_if<!std::is_same<W, gbbs::empty>::value,
                                   int>::type = 0>
-inline sequence<std::tuple<uintE, uintE, W>> MinimumSpanningForest(
-    symmetric_graph<vertex, W>& GA) {
+inline void MinimumSpanningForest(symmetric_graph<vertex, W>& GA) {
   using edge = std::tuple<uintE, uintE, W>;
 
   size_t n = GA.n;
   sequence<edge> edges = GA.edges();
 
-  timer kt;
-  kt.start();
-  auto weight_seq = parlay::delayed_seq<W>(
-      edges.size(), [&](size_t i) { return std::get<2>(edges[i]); });
+  timer kt; kt.start();
+  auto weight_seq = pbbslib::make_delayed<W>(edges.size(), [&] (size_t i) { return std::get<2>(edges[i]); });
   std::cout << weight_seq[0] << std::endl;
-  auto max_weight = parlay::reduce_max(weight_seq);
+  auto max_weight = pbbslib::reduce_max(weight_seq);
   std::cout << "max_weight = " << max_weight << std::endl;
-  timer st;
-  st.start();
-  auto comp = [&](const edge& l, const edge& r) {
-    return std::get<2>(l) < std::get<2>(r);
-  };
-  parlay::sample_sort_inplace(make_slice(edges), comp);
-  st.stop();
-  st.next("sort time");
+  timer st; st.start();
+  pbbslib::integer_sort_inplace(edges.slice(), [&] (const edge& e) { return std::get<2>(e); }, pbbslib::log2_up(n));
+  st.stop(); st.reportTotal("sort time");
 
-  auto components =
-      sequence<uintE>::from_function(n, [&](size_t i) { return i; });
+  auto components = sequence<uintE>(n, [&] (size_t i) { return i; });
   constexpr auto find{find_variants::find_compress};
   auto unite{unite_variants::Unite<decltype(find)>{find}};
 
   W weight = 0;
-  auto MST = sequence<edge>(n);
-  size_t k = 0;
-  for (size_t i = 0; i < edges.size(); i++) {
-    auto[u, v, w] = edges[i];
+  for (size_t i=0; i<edges.size(); i++) {
+    auto [u,v,w] = edges[i];
     if (find(u, components) != find(v, components)) {
       unite(u, v, components);
       weight += w;
-      MST[k++] = {u, v, w};
     }
   }
-  kt.stop();
-  kt.next(
-      "kruskal time (excluding G.get_edges() to convert graph to edge-list "
-      "format)");
+  kt.stop(); kt.reportTotal("kruskal time (excluding G.get_edges() to convert graph to edge-list format)");
   std::cout << "MST weight = " << weight << std::endl;
-  MST.resize(k);
-  return MST;
 }
 
 template <
     template <class W> class vertex, class W,
     typename std::enable_if<std::is_same<W, gbbs::empty>::value, int>::type = 0>
-inline sequence<std::pair<uintE, uintE>> MinimumSpanningForest(
-    symmetric_graph<vertex, W>& GA) {
-  return sequence<std::pair<uintE, uintE>>();
+inline uint32_t* MinimumSpanningForest(symmetric_graph<vertex, W>& GA) {
+  std::cout << "Unimplemented for unweighted graphs"
+            << "\n";
+  exit(0);
 }
 
 }  // namespace MinimumSpanningForest_kruskal

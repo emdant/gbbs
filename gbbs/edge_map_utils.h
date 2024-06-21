@@ -50,8 +50,7 @@ template <typename data,
           typename std::enable_if<!std::is_same<data, gbbs::empty>::value,
                                   int>::type = 0>
 inline auto get_emdense_gen(std::tuple<bool, data>* next) {
-  return [next](uintE ngh, std::optional<data> m = std::nullopt)
-      __attribute__((always_inline)) {
+  return [next](uintE ngh, std::optional<data> m = std::nullopt) __attribute__((always_inline)) {
     if (m.has_value()) next[ngh] = std::make_tuple(1, *m);
   };
 }
@@ -70,8 +69,7 @@ template <typename data,
           typename std::enable_if<!std::is_same<data, gbbs::empty>::value,
                                   int>::type = 0>
 inline auto get_emdense_forward_gen(std::tuple<bool, data>* next) {
-  return [next](uintE ngh, std::optional<data> m = std::nullopt)
-      __attribute__((always_inline)) {
+  return [next](uintE ngh, std::optional<data> m = std::nullopt) __attribute__((always_inline)) {
     if (m.has_value()) next[ngh] = std::make_tuple(1, *m);
   };
 }
@@ -81,8 +79,7 @@ template <typename data,
           typename std::enable_if<std::is_same<data, gbbs::empty>::value,
                                   int>::type = 0>
 inline auto get_emsparse_gen_full(uintE* outEdges) {
-  return [outEdges](uintE ngh, uintT offset, bool m)
-      __attribute__((always_inline)) {
+  return [outEdges](uintE ngh, uintT offset, bool m) __attribute__((always_inline)) {
     if (m) {
       outEdges[offset] = ngh;
     } else {
@@ -95,9 +92,7 @@ template <typename data,
           typename std::enable_if<!std::is_same<data, gbbs::empty>::value,
                                   int>::type = 0>
 inline auto get_emsparse_gen_full(std::tuple<uintE, data>* outEdges) {
-  return [outEdges](uintE ngh, uintT offset,
-                    std::optional<data> m = std::nullopt)
-      __attribute__((always_inline)) {
+  return [outEdges](uintE ngh, uintT offset, std::optional<data> m = std::nullopt) __attribute__((always_inline)) {
     if (m.has_value()) {
       outEdges[offset] = std::make_tuple(ngh, *m);
     } else {
@@ -120,8 +115,7 @@ template <typename data,
           typename std::enable_if<std::is_same<data, gbbs::empty>::value,
                                   int>::type = 0>
 inline auto get_emsparse_blocked_gen(uintE* outEdges) {
-  return [outEdges](uintE ngh, uintT offset, bool m = false)
-      __attribute__((always_inline)) {
+  return [outEdges](uintE ngh, uintT offset, bool m = false) __attribute__((always_inline)) {
     if (m) {
       outEdges[offset] = ngh;
       return true;
@@ -134,9 +128,7 @@ template <typename data,
           typename std::enable_if<!std::is_same<data, gbbs::empty>::value,
                                   int>::type = 0>
 inline auto get_emsparse_blocked_gen(uintE* outEdges) {
-  return [outEdges](uintE ngh, uintT offset,
-                    std::optional<data> m = std::nullopt)
-      __attribute__((always_inline)) {
+  return [outEdges](uintE ngh, uintT offset, std::optional<data> m = std::nullopt) __attribute__((always_inline)) {
     if (m.has_value()) {
       outEdges[offset] = ngh;
       return true;
@@ -163,8 +155,7 @@ template <typename data,
           typename std::enable_if<!std::is_same<data, gbbs::empty>::value,
                                   int>::type = 0>
 inline auto get_emblock_gen(std::tuple<uintE, data>* outEdges) {
-  return [outEdges](uintE ngh, uintT offset,
-                    std::optional<data> m = std::nullopt)
+  return [outEdges](uintE ngh, uintT offset, std::optional<data> m = std::nullopt)
       __attribute__((always_inline)) {
     if (m.has_value()) {
       outEdges[offset] = std::make_tuple(ngh, *m);

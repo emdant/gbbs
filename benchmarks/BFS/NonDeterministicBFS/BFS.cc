@@ -48,8 +48,7 @@ double BFS_runner(Graph& G, commandLine P) {
   std::cout << "### ------------------------------------" << std::endl;
   std::cout << "### ------------------------------------" << std::endl;
 
-  timer t;
-  t.start();
+  timer t; t.start();
   auto parents = BFS(G, src);
   double tt = t.stop();
 

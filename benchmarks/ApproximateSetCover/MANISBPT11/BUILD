@@ -1,20 +1,16 @@
-licenses(["notice"])
-
-package(
-    default_visibility = ["//visibility:public"],
-)
-
 cc_library(
-    name = "ApproximateSetCover",
-    hdrs = ["ApproximateSetCover.h"],
-    deps = [
-        "//gbbs",
-        "//gbbs:julienne",
-    ],
+  name = "ApproximateSetCover",
+  hdrs = ["ApproximateSetCover.h"],
+  deps = [
+  "//gbbs:gbbs",
+  "//gbbs:julienne",
+  "//pbbslib:random",
+  "//pbbslib:random_shuffle",
+  ]
 )
 
 cc_binary(
-    name = "ApproximateSetCover_main",
-    srcs = ["ApproximateSetCover.cc"],
-    deps = [":ApproximateSetCover"],
+  name = "ApproximateSetCover_main",
+  srcs = ["ApproximateSetCover.cc"],
+  deps = [":ApproximateSetCover"]
 )

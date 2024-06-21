@@ -1,20 +1,18 @@
-licenses(["notice"])
-
-package(
-    default_visibility = ["//visibility:public"],
-)
-
 cc_library(
-    name = "DensestSubgraph",
-    hdrs = ["DensestSubgraph.h"],
-    deps = [
-        "//gbbs",
-        "//gbbs:edge_map_reduce",
-    ],
+  name = "DensestSubgraph",
+  hdrs = ["DensestSubgraph.h"],
+  deps = [
+  "//gbbs:gbbs"
+  ]
 )
 
 cc_binary(
-    name = "DensestSubgraph_main",
-    srcs = ["DensestSubgraph.cc"],
-    deps = [":DensestSubgraph"],
+  name = "DensestSubgraph_main",
+  srcs = ["DensestSubgraph.cc"],
+  deps = [":DensestSubgraph"]
 )
+
+package(
+  default_visibility = ["//visibility:public"],
+)
+

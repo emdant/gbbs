@@ -3,7 +3,8 @@
 namespace gbbs {
 namespace byte {
 
-long compressFirstEdge(uchar* start, long offset, long source, long target) {
+long compressFirstEdge(uchar* start, long offset, long source,
+                              long target) {
   long diff = target - source;
   long preCompress = diff;
   int bytesUsed = 0;
@@ -35,6 +36,8 @@ long compressFirstEdge(uchar* start, long offset, long source, long target) {
   }
   return offset;
 }
+
+
 
 }  // namespace byte
 }  // namespace gbbs

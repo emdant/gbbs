@@ -32,48 +32,45 @@
 #include <string>
 
 #include "bridge.h"
-#include "edge_map_blocked.h"
 #include "edge_map_utils.h"
+#include "edge_map_blocked.h"
 #include "flags.h"
 #include "vertex_subset.h"
 
 namespace gbbs {
 
-template <class Data /* per-vertex data in the emitted vertex_subset */,
-          class Graph /* graph type */, class VS /* vertex_subset type */,
-          class F /* edgeMap struct */>
+template <class Data  /* per-vertex data in the emitted vertex_subset */,
+          class Graph /* graph type */,
+          class VS    /* vertex_subset type */,
+          class F     /* edgeMap struct */>
 inline vertexSubsetData<Data> edgeMapDense(Graph& GA, VS& vertexSubset, F& f,
                                            const flags fl) {
   using D = typename vertexSubsetData<Data>::D;
   size_t n = GA.n;
   auto dense_par = fl & dense_parallel;
   if (should_output(fl)) {
-    auto next = sequence<D>::from_function(n, [&](size_t i) {
-      if
-        constexpr(std::is_same<Data, gbbs::empty>()) return 0;
-      else
-        return std::make_tuple<uintE, Data>(0, Data());
+    auto next = sequence<D>(n,
+      [&] (size_t i) {
+        if constexpr (std::is_same<Data, gbbs::empty>()) return 0;
+        else return std::make_tuple<uintE, Data>(0, Data());
     });
     auto g = get_emdense_gen<Data>(next.begin());
-    parallel_for(0, n,
-                 [&](size_t v) {
-                   if (f.cond(v)) {
-                     auto neighbors = (fl & in_edges)
-                                          ? GA.get_vertex(v).out_neighbors()
-                                          : GA.get_vertex(v).in_neighbors();
-                     neighbors.decodeBreakEarly(vertexSubset, f, g, dense_par);
-                   }
-                 },
-                 (fl & fine_parallel) ? 1 : 2048);
+    parallel_for(
+        0, n,
+        [&](size_t v) {
+          if (f.cond(v)) {
+            auto neighbors = (fl & in_edges) ? GA.get_vertex(v).out_neighbors() : GA.get_vertex(v).in_neighbors();
+            neighbors.decodeBreakEarly(vertexSubset, f, g, dense_par);
+          }
+        },
+        (fl & fine_parallel) ? 1 : 2048);
     return vertexSubsetData<Data>(n, std::move(next));
   } else {
     auto g = get_emdense_nooutput_gen<Data>();
     parallel_for(0, n,
                  [&](size_t v) {
                    if (f.cond(v)) {
-                     auto neighbors = (fl & in_edges)
-                                          ? GA.get_vertex(v).out_neighbors()
-                                          : GA.get_vertex(v).in_neighbors();
+                     auto neighbors = (fl & in_edges) ? GA.get_vertex(v).out_neighbors() : GA.get_vertex(v).in_neighbors();
                      neighbors.decodeBreakEarly(vertexSubset, f, g, dense_par);
                    }
                  },
@@ -82,48 +79,40 @@ inline vertexSubsetData<Data> edgeMapDense(Graph& GA, VS& vertexSubset, F& f,
   }
 }
 
-template <class Data /* per-vertex data in the emitted vertex_subset */,
-          class Graph /* graph type */, class VS /* vertex_subset type */,
-          class F /* edgeMap struct */>
-inline vertexSubsetData<Data> edgeMapDenseForward(Graph& GA, VS& vertexSubset,
-                                                  F& f, const flags fl) {
-  gbbs_debug(std::cout << "# dense forward" << std::endl;);
+template <class Data  /* per-vertex data in the emitted vertex_subset */,
+          class Graph /* graph type */,
+          class VS    /* vertex_subset type */,
+          class F     /* edgeMap struct */>
+inline vertexSubsetData<Data> edgeMapDenseForward(Graph& GA, VS& vertexSubset, F& f,
+                                                  const flags fl) {
+  debug(std::cout << "# dense forward" << std::endl;);
   using D = typename vertexSubsetData<Data>::D;
   size_t n = GA.n;
   if (should_output(fl)) {
     auto next = sequence<D>(n);
     auto g = get_emdense_forward_gen<Data>(next.begin());
-    if
-      constexpr(std::is_same<Data, gbbs::empty>()) {
-        parallel_for(0, n, [&](size_t i) { next[i] = 0; }, kDefaultGranularity);
-      }
-    else {
-      parallel_for(0, n, [&](size_t i) { std::get<0>(next[i]) = 0; },
-                   kDefaultGranularity);
+    if constexpr (std::is_same<Data, gbbs::empty>()) {
+      par_for(0, n, kDefaultGranularity,
+              [&](size_t i) { next[i] = 0; });
+    } else {
+      par_for(0, n, kDefaultGranularity,
+              [&](size_t i) { std::get<0>(next[i]) = 0; });
     }
-    parallel_for(0, n,
-                 [&](size_t i) {
-                   if (vertexSubset.isIn(i)) {
-                     auto neighbors = (fl & in_edges)
-                                          ? GA.get_vertex(i).in_neighbors()
-                                          : GA.get_vertex(i).out_neighbors();
-                     neighbors.decode(f, g);
-                   }
-                 },
-                 1);
+    par_for(0, n, 1, [&](size_t i) {
+      if (vertexSubset.isIn(i)) {
+        auto neighbors = (fl & in_edges) ? GA.get_vertex(i).in_neighbors() : GA.get_vertex(i).out_neighbors();
+        neighbors.decode(f, g);
+      }
+    });
     return vertexSubsetData<Data>(n, std::move(next));
   } else {
     auto g = get_emdense_forward_nooutput_gen<Data>();
-    parallel_for(0, n,
-                 [&](size_t i) {
-                   if (vertexSubset.isIn(i)) {
-                     auto neighbors = (fl & in_edges)
-                                          ? GA.get_vertex(i).in_neighbors()
-                                          : GA.get_vertex(i).out_neighbors();
-                     neighbors.decode(f, g);
-                   }
-                 },
-                 1);
+    par_for(0, n, 1, [&](size_t i) {
+      if (vertexSubset.isIn(i)) {
+        auto neighbors = (fl & in_edges) ? GA.get_vertex(i).in_neighbors() : GA.get_vertex(i).out_neighbors();
+        neighbors.decode(f, g);
+      }
+    });
     return vertexSubsetData<Data>(n);
   }
 }
@@ -141,20 +130,12 @@ inline vertexSubsetData<Data> edgeMapData(Graph& GA, VS& vs, F f,
   if (threshold == -1) dense_threshold = numEdges / 20;
   if (vs.size() == 0) return vertexSubsetData<Data>(numVertices);
 
-  if ((fl & dense_only) || (vs.isDense && vs.size() > numVertices / 10)) {
-    vs.toDense();
-    timer dt;
-    dt.start();
-    auto ret = (fl & dense_forward)
-                   ? edgeMapDenseForward<Data, Graph, VS, F>(GA, vs, f, fl)
-                   : edgeMapDense<Data, Graph, VS, F>(GA, vs, f, fl);
-    dt.stop();
-    gbbs_debug(dt.next("dense time"););
-    return ret;
+  if (vs.isDense && vs.size() > numVertices / 10) {
+    return (fl & dense_forward)
+               ? edgeMapDenseForward<Data, Graph, VS, F>(GA, vs, f, fl)
+               : edgeMapDense<Data, Graph, VS, F>(GA, vs, f, fl);
   }
 
-  timer st;
-  st.start();
   size_t out_degrees = 0;
   if (vs.out_degrees_set()) {
     out_degrees = vs.get_out_degrees();
@@ -164,26 +145,21 @@ inline vertexSubsetData<Data> edgeMapData(Graph& GA, VS& vs, F f,
       return (fl & in_edges) ? GA.get_vertex(vs.vtx(i)).in_degree()
                              : GA.get_vertex(vs.vtx(i)).out_degree();
     };
-    auto degree_im = parlay::delayed_seq<size_t>(vs.size(), degree_f);
-    out_degrees = parlay::reduce(degree_im);
+    auto degree_im = pbbslib::make_sequence<size_t>(vs.size(), degree_f);
+    out_degrees = pbbslib::reduce_add(degree_im);
     vs.set_out_degrees(out_degrees);
   }
 
   if (out_degrees == 0) return vertexSubsetData<Data>(numVertices);
   if (m + out_degrees > dense_threshold && !(fl & no_dense)) {
     vs.toDense();
-    auto ret = (fl & dense_forward)
-                   ? edgeMapDenseForward<Data, Graph, VS, F>(GA, vs, f, fl)
-                   : edgeMapDense<Data, Graph, VS, F>(GA, vs, f, fl);
-    st.stop();
-    gbbs_debug(st.next("dense convert time"););
-    return ret;
+    return (fl & dense_forward)
+               ? edgeMapDenseForward<Data, Graph, VS, F>(GA, vs, f, fl)
+               : edgeMapDense<Data, Graph, VS, F>(GA, vs, f, fl);
   } else {
     auto vs_out = edgeMapChunked<Data, Graph, VS, F>(GA, vs, f, fl);
-    st.stop();
-    gbbs_debug(st.next("sparse time"););
-    //    auto vs_out = edgeMapBlocked<Data, Graph, VS, F>(GA, vs, f, fl);
-    //    auto vs_out = edgeMapSparse<Data, Graph, VS, F>(GA, vs, f, fl);
+//    auto vs_out = edgeMapBlocked<Data, Graph, VS, F>(GA, vs, f, fl);
+//    auto vs_out = edgeMapSparse<Data, Graph, VS, F>(GA, vs, f, fl);
     return vs_out;
   }
 }

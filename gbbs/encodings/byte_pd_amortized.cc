@@ -3,7 +3,8 @@
 namespace gbbs {
 namespace bytepd_amortized {
 
-long compressFirstEdge(uchar* start, long offset, long source, long target) {
+long compressFirstEdge(uchar* start, long offset, long source,
+                              long target) {
   long diff = target - source;
   long preCompress = diff;
   int bytesUsed = 0;
@@ -54,15 +55,22 @@ long compressEdge(uchar* start, long curOffset, uintE e) {
   return curOffset;
 }
 
-uintE get_block_degree(uchar* edge_start, uintE degree, uintE block_num) {
+uintE get_num_blocks(uchar* edge_start,  uintE degree) {
   if (degree == 0) {
     return 0;
   }
   uintE virtual_degree = *((uintE*)edge_start);
   size_t num_blocks = 1 + (virtual_degree - 1) / PARALLEL_DEGREE;
+  return num_blocks;
+}
+
+uintE get_block_degree(uchar* edge_start, uintE degree, uintE block_num) {
+  if (degree == 0) { return 0; }
+  uintE virtual_degree = *((uintE*)edge_start);
+  size_t num_blocks = 1 + (virtual_degree - 1) / PARALLEL_DEGREE;
   uintE* block_offsets = (uintE*)(edge_start + sizeof(uintE));
 
-  auto block_ends = [&](size_t j) {
+  auto block_ends = [&] (size_t j) {
     uintE end = (j == (num_blocks - 1))
                     ? degree
                     : (*((uintE*)(edge_start + block_offsets[j])));
@@ -70,7 +78,7 @@ uintE get_block_degree(uchar* edge_start, uintE degree, uintE block_num) {
   };
   uintE block_start = (block_num == 0) ? 0 : block_ends(block_num - 1);
   uintE block_end = block_ends(block_num);
-  return block_end - block_start;  // TODO: check
+  return block_end - block_start; // TODO: check
 }
 
 }  // namespace bytepd_amortized

@@ -1,17 +1,13 @@
-licenses(["notice"])
-
-package(
-    default_visibility=["//visibility:public"],
-)
-
 cc_binary(
     name="compressor",
     srcs=["compressor.cc"],
     deps=[
         "//gbbs",
         "//gbbs:io",
+        "//gbbs:parse_command_line",
         "//gbbs/encodings:byte_pd_amortized",
-        "//gbbs/helpers:parse_command_line",
+        "//pbbslib:random",
+        "//pbbslib:utilities",
     ],
 )
 
@@ -28,6 +24,8 @@ cc_binary(
     srcs=["random_reorder.cc"],
     deps=[
         "//gbbs",
+        "//pbbslib:random_shuffle",
+        "//pbbslib/strings:string_basics",
     ],
 )
 
@@ -36,6 +34,8 @@ cc_binary(
     srcs=["to_edge_list.cc"],
     deps=[
         "//gbbs",
+        "//pbbslib:random_shuffle",
+        "//pbbslib/strings:string_basics",
     ],
 )
 
@@ -44,33 +44,7 @@ cc_binary(
     srcs=["snap_converter.cc"],
     deps=[
         "//gbbs:graph_io",
-        "//gbbs/helpers:parse_command_line",
-    ],
-)
-cc_binary(
-    name="gap_converter",
-    srcs=["gap_converter.cc"],
-    deps=[
-        "//gbbs:graph_io",
-        "//gbbs/helpers:parse_command_line",
-        ":converter_library",
-    ],
-)
-
-cc_binary(
-    name="print_edges",
-    srcs=["print_edges.cc"],
-    deps=[
-        "//gbbs",
-    ],
-)
-
-cc_binary(
-    name="invert_edges",
-    srcs=["invert_edges.cc"],
-    deps=[
-        "//gbbs",
-        ":converter_library",
+        "//gbbs:parse_command_line",
     ],
 )
 

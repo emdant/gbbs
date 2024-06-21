@@ -1,24 +1,23 @@
-licenses(["notice"])
-
-package(
-    default_visibility = ["//visibility:public"],
-)
-
 cc_library(
-    name = "MaximalMatching",
-    hdrs = ["MaximalMatching.h"],
-    deps = [
-        "//gbbs",
-        "//gbbs/helpers:sparse_table",
-        "//gbbs/helpers:speculative_for",
-    ],
+  name = "MaximalMatching",
+  hdrs = ["MaximalMatching.h"],
+  deps = [
+  "//gbbs:gbbs",
+  "//gbbs:speculative_for",
+  "//gbbs/pbbslib:sparse_table",
+  "//gbbs/pbbslib:dyn_arr"
+  ]
 )
 
 cc_binary(
-    name = "MaximalMatching_main",
-    srcs = ["MaximalMatching.cc"],
-    deps = [
-        ":MaximalMatching",
-        "//gbbs",
-    ],
+  name = "MaximalMatching_main",
+  srcs = ["MaximalMatching.cc"],
+  deps = [
+  ":MaximalMatching",
+  "//pbbslib/strings:string_basics"
+  ]
+)
+
+package(
+  default_visibility = ["//visibility:public"],
 )
