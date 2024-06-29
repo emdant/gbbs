@@ -19,8 +19,6 @@ test --test_strategy=standalone
 
 
 # By default build in C++17 mode using the Homegrown scheduler for parallelism.
-build --repo_env=CC=/mnt/ldap_user_homes/mdantonio01/cilkplus/bin/gcc
-build --cxxopt=-L/mnt/ldap_user_homes/mdantonio01/cilkplus/lib64
 build --cxxopt=-std=c++17
 build --cxxopt=-mcx16        # 16 byte CAS
 build --cxxopt=-DHOMEGROWN   # use the homegrown scheduler
