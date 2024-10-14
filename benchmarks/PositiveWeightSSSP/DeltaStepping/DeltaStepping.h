@@ -29,7 +29,7 @@
 #include <cmath>
 
 namespace gbbs {
-std::atomic<std::size_t> visits{0};
+// std::atomic<std::size_t> visits{0};
 
 template <class W, class Distance> struct Visit_F {
   sequence<std::pair<Distance, bool>> &dists;
@@ -56,7 +56,7 @@ template <class W, class Distance> struct Visit_F {
 
   inline std::optional<Distance> updateAtomic(const uintE &s, const uintE &d,
                                               const W &w) {
-    visits++;
+    // visits++;
     Distance dist = dists[d].first;
     Distance n_dist;
     if constexpr (std::is_same<W, gbbs::empty>()) {
@@ -81,7 +81,7 @@ template <class W, class Distance> struct Visit_F {
 template <class Graph>
 auto DeltaStepping(Graph &G, uintE src, double delta,
                    size_t num_buckets = 128) {
-  visits = 0;
+  // visits = 0;
   using W = typename Graph::weight_type;
   using Distance =
       typename std::conditional<std::is_same<W, gbbs::empty>::value, uintE,
@@ -158,7 +158,7 @@ auto DeltaStepping(Graph &G, uintE src, double delta,
   auto ret = sequence<Distance>::from_function(
       n, [&](size_t i) { return dists[i].first; });
 
-  std::cout << "Number of relaxations: " << visits << std::endl;
+  // std::cout << "Number of relaxations: " << visits << std::endl;
   return ret;
 }
 

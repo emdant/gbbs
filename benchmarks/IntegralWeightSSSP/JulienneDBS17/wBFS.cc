@@ -35,12 +35,17 @@
 
 #define WEIGHTED 1
 
+#include "gbbs/source.h"
+
 #include "wBFS.h"
 
 namespace gbbs {
-template <class Graph>
-double wBFS_runner(Graph& G, commandLine P) {
+template <class Graph> double wBFS_runner(Graph &G, commandLine P) {
+  static SourcePicker<Graph> sp(G, true);
   uintE src = P.getOptionLongValue("-src", 0);
+  if (src == 0)
+    src = sp.PickNext();
+
   size_t num_buckets = P.getOptionLongValue("-nb", 32);
   bool no_blocked = P.getOptionValue("-noblocked");
   bool largemem = P.getOptionValue("-largemem");
@@ -68,6 +73,6 @@ double wBFS_runner(Graph& G, commandLine P) {
   std::cout << "### Running Time: " << tt << std::endl;
   return tt;
 }
-}  // namespace gbbs
+} // namespace gbbs
 
 generate_weighted_main(gbbs::wBFS_runner, false);
