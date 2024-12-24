@@ -1,3 +1,5 @@
+#pragma once
+
 #include <random>
 #include <type_traits>
 
@@ -39,30 +41,20 @@ private:
 
 template <typename GraphT_> class SourcePicker {
 public:
-  explicit SourcePicker(const GraphT_ &g, bool non_changing)
-      : given_source_(-1), non_changing_(non_changing), rng_(kRandSeed),
-        udist_(g.n - 1, rng_), g_(g) {}
+  explicit SourcePicker(const GraphT_ &g)
+      : rng_(kRandSeed), udist_(g.n - 1, rng_), g_(g) {}
 
   gbbs::uintE PickNext() {
-    if (given_source_ != -1)
-      return given_source_;
-    if (non_changing_ && last_ != -1)
-      return last_;
-
     gbbs::uintE source;
     do {
       source = udist_();
     } while (g_.get_vertex(source).out_degree() == 0);
-    last_ = source;
 
     return source;
   }
 
 private:
-  gbbs::uintE given_source_;
-  bool non_changing_;
   std::mt19937_64 rng_;
   UniDist<gbbs::uintE, std::mt19937_64> udist_;
   const GraphT_ &g_;
-  gbbs::uintE last_ = -1;
 };

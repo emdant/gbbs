@@ -35,17 +35,12 @@
 
 #define WEIGHTED 1
 
-#include "gbbs/source.h"
-
 #include "DeltaStepping.h"
 
 namespace gbbs {
 
-template <class Graph> double DeltaStepping_runner(Graph &G, commandLine P) {
-  static SourcePicker<Graph> sp(G, true);
-  uintE src = P.getOptionLongValue("-src", 0);
-  if (src == 0)
-    src = sp.PickNext();
+template <class Graph>
+double DeltaStepping_runner(Graph &G, commandLine P, uintE src) {
   size_t num_buckets = P.getOptionLongValue("-nb", 32);
   double delta = P.getOptionDoubleValue("-delta", 1.0);
 
@@ -75,4 +70,4 @@ template <class Graph> double DeltaStepping_runner(Graph &G, commandLine P) {
 } // namespace gbbs
 
 // generate_float_main(gbbs::DeltaStepping_runner, false);
-generate_weighted_main(gbbs::DeltaStepping_runner, false);
+generate_weighted_traversal_main(gbbs::DeltaStepping_runner, false);

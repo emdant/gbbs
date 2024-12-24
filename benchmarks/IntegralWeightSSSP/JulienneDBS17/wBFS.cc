@@ -35,17 +35,10 @@
 
 #define WEIGHTED 1
 
-#include "gbbs/source.h"
-
 #include "wBFS.h"
 
 namespace gbbs {
-template <class Graph> double wBFS_runner(Graph &G, commandLine P) {
-  static SourcePicker<Graph> sp(G, true);
-  uintE src = P.getOptionLongValue("-src", 0);
-  if (src == 0)
-    src = sp.PickNext();
-
+template <class Graph> double wBFS_runner(Graph &G, commandLine P, uintE src) {
   size_t num_buckets = P.getOptionLongValue("-nb", 32);
   bool no_blocked = P.getOptionValue("-noblocked");
   bool largemem = P.getOptionValue("-largemem");
@@ -75,4 +68,4 @@ template <class Graph> double wBFS_runner(Graph &G, commandLine P) {
 }
 } // namespace gbbs
 
-generate_weighted_main(gbbs::wBFS_runner, false);
+generate_weighted_traversal_main(gbbs::wBFS_runner, false);
