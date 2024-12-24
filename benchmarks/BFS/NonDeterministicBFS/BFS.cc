@@ -32,13 +32,18 @@
 //     -m : indicate that the graph should be mmap'd
 //     -s : indicate that the graph is symmetric
 
+#include "gbbs/source.h"
+
 #include "BFS.h"
 
 namespace gbbs {
 
-template <class Graph>
-double BFS_runner(Graph& G, commandLine P) {
-  uintE src = static_cast<uintE>(P.getOptionLongValue("-src", 0));
+template <class Graph> double BFS_runner(Graph &G, commandLine P) {
+  static SourcePicker<Graph> sp(G, true);
+  uintE src = P.getOptionLongValue("-src", 0);
+  if (src == 0)
+    src = sp.PickNext();
+
   std::cout << "### Application: BFS" << std::endl;
   std::cout << "### Graph: " << P.getArgument(0) << std::endl;
   std::cout << "### Threads: " << num_workers() << std::endl;
@@ -57,6 +62,6 @@ double BFS_runner(Graph& G, commandLine P) {
   return tt;
 }
 
-}  // namespace gbbs
+} // namespace gbbs
 
 generate_main(gbbs::BFS_runner, false);
