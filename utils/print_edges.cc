@@ -6,15 +6,19 @@ namespace gbbs {
 template <class Graph> double print_edges(Graph &G, gbbs::commandLine P) {
   timer t;
   t.start();
+
+  std::cout << "n = " << G.n << ", m = " << G.m << std::endl;
+
   auto n = G.n;
   for (size_t u = 0; u < n; u++) {
     if (G.get_vertex(u).out_degree() > 0) {
       auto neigh = G.get_vertex(u).out_neighbors();
+      auto min = neigh.degree < 5 ? neigh.degree : 5;
 
-      for (size_t i = 0; i < 1; i++) {
-        std::cout << neigh.get_neighbor(i) << "," << neigh.get_weight(i) << " ";
+      for (size_t i = 0; i < min; i++) {
+        std::cout << i << "-th neighbor: " << neigh.get_neighbor(i)
+                  << ", weight: " << neigh.get_weight(i) << std::endl;
       }
-      std::cout << std::endl;
       break;
     }
   }
