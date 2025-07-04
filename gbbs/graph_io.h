@@ -253,6 +253,14 @@ asymmetric_graph<asymmetric_vertex, weight_type> read_weighted_asymmetric_graph(
       edges, inEdges);
 }
 
+bool is_gap_graph_directed(const char *fname) {
+  std::pair<char *, size_t> MM = mmapStringFromFile(fname);
+  auto mmap_file = MM.first;
+
+  bool directed = ((bool *)mmap_file)[0];
+  return directed;
+}
+
 template <class weight_type>
 symmetric_graph<symmetric_vertex, weight_type>
 read_gap_weighted_symmetric_graph(
@@ -332,7 +340,6 @@ read_gap_weighted_asymmetric_graph(
   out_edges = (id_and_weight *)(mmap_file + skip);
   std::cout << "out_edges" << std::endl;
 
-  uintE *edg = (uintE *)out_edges;
   std::cout << std::get<0>(out_edges[0]) << "," << std::get<1>(out_edges[0])
             << std::endl;
 

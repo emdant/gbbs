@@ -19,9 +19,6 @@ int RunGAPConverter(int argc, char *argv[]) {
       "  -i <filename>: Path to the input GAP file.\n"
       "  -o <filename>: Path to the output GBBS file.\n"
       "Optional arguments:\n"
-      "  -s: Treat the edges as a list of undirected edges and create a\n"
-      "      symmetric graph. (Without this flag, the edges are treated as a\n"
-      "      list of directed edges.)\n"
       "  -w: Use this flag if the edge list is weighted with 32-bit integers.\n"
       "floats.\n"};
   const std::string kInputFlag{"-i"};
@@ -30,8 +27,9 @@ int RunGAPConverter(int argc, char *argv[]) {
   const commandLine parameters{argc, argv, kCommandLineHelpString};
   const char *const input_file{parameters.getOptionValue(kInputFlag)};
   const char *const output_file{parameters.getOptionValue(kOutputFlag)};
-  const bool is_symmetric_graph{parameters.getOption("-s")};
   const bool integer_weighted{parameters.getOption("-w")};
+
+  bool is_symmetric_graph = false;
 
   if (argc < 2 || std::string(argv[1]) == "-h" ||
       std::string(argv[1]) == "--help") {
@@ -47,6 +45,10 @@ int RunGAPConverter(int argc, char *argv[]) {
   }
   std::ofstream out(output_file, std::ofstream::out | std::ios::binary);
   std::cout << "opened out file" << std::endl;
+
+  is_symmetric_graph = !gbbs_io::is_gap_graph_directed(input_file);
+  std::cout << "GAP graph is "
+            << (is_symmetric_graph ? "undirected" : "directed") << std::endl;
 
   if (integer_weighted) {
     if (is_symmetric_graph) {
@@ -71,12 +73,7 @@ int RunGAPConverter(int argc, char *argv[]) {
     }
 
   } else {
-    if (is_symmetric_graph) {
-
-    } else {
-      // gbbs_io::read_gap_unweighted_asymmetric_graph<int32_t>(input_file,
-      // true, true);
-    }
+    std::cout << "only integer-weighted GAP graphs are supported" << std::endl;
   }
   return 0;
 }
