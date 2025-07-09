@@ -41,7 +41,7 @@ std::pair<char *, size_t> mmapStringFromFile(const char *filename) {
     exit(-1);
   }
   char *p =
-      static_cast<char *>(mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
+      static_cast<char *>(mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
   if (p == MAP_FAILED) {
     perror("mmap");
     exit(-1);
