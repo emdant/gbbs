@@ -47,13 +47,33 @@ cc_binary(
         "//gbbs/helpers:parse_command_line",
     ],
 )
+
 cc_binary(
-    name="gap_converter",
+    name="gap_converter-int32",
     srcs=["gap_converter.cc"],
     deps=[
         "//gbbs:graph_io",
         "//gbbs/helpers:parse_command_line",
         ":converter_library",
+    ],
+)
+
+cc_binary(
+    name="gap_converter-float",
+    srcs=["gap_converter.cc"],
+    deps=[
+        "//gbbs:graph_io",
+        "//gbbs/helpers:parse_command_line",
+        ":converter_library",
+    ],
+    copts=["-DUSE_FLOAT"]
+)
+
+filegroup(
+    name = "gap_converter",
+    srcs = [
+        ":gap_converter-float",
+        ":gap_converter-int32",
     ],
 )
 

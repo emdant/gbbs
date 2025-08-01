@@ -261,6 +261,10 @@ read_gap_weighted_symmetric_graph(
     const char *fname, bool mmap, bool binary, char *bytes = nullptr,
     size_t bytes_size = std::numeric_limits<size_t>::max()) {
   using id_and_weight = std::tuple<uintE, weight_type>;
+  using id_and_weight_struct = struct {
+    uintE e;
+    weight_type w;
+  };
 
   std::pair<char *, size_t> MM = mmapStringFromFile(fname);
   auto mmap_file = MM.first;
@@ -285,12 +289,19 @@ read_gap_weighted_symmetric_graph(
     v_out_data[i].offset = out_offsets[i];
     v_out_data[i].degree = out_offsets[i + 1] - v_out_data[i].offset;
   });
-  std::cout << v_out_data[n - 1].degree << std::endl;
-  std::cout << "out_offsets" << std::endl;
 
   uint64_t skip = sizeof(bool) + 2 * sizeof(uintT) + (n + 1) * sizeof(uintT);
   out_edges = (id_and_weight *)(mmap_file + skip);
-  std::cout << "out_edges" << std::endl;
+  id_and_weight_struct *test = (id_and_weight_struct *)(mmap_file + skip);
+
+  std::cout << "Printing first out-edge as a check:" << std::endl;
+  std::cout << "id_weight_tuple[0]: " << std::get<0>(out_edges[0]);
+  std::cout << " - id_weight_tuple[1]: " << std::get<1>(out_edges[0])
+            << std::endl;
+
+  std::cout << "Printing first out-edge as a check using struct:" << std::endl;
+  std::cout << "id_weight_struct[0]: " << test[0].e;
+  std::cout << " - id_weight_struct[1]: " << test[0].w << std::endl;
 
   return symmetric_graph<symmetric_vertex, weight_type>(
       v_out_data, n, m, [=]() { gbbs::free_array(v_out_data, n); }, out_edges);
@@ -302,6 +313,10 @@ read_gap_weighted_asymmetric_graph(
     const char *fname, bool mmap, bool binary, char *bytes = nullptr,
     size_t bytes_size = std::numeric_limits<size_t>::max()) {
   using id_and_weight = std::tuple<uintE, weight_type>;
+  using id_and_weight_struct = struct {
+    uintE e;
+    weight_type w;
+  };
 
   std::pair<char *, size_t> MM = mmapStringFromFile(fname);
   auto mmap_file = MM.first;
@@ -319,7 +334,7 @@ read_gap_weighted_asymmetric_graph(
 
   uintT *sizes = (uintT *)(mmap_file + sizeof(bool));
   m = sizes[0], n = sizes[1];
-  std::cout << m << " " << n << std::endl;
+  std::cout << "num_edges: " << m << " num_nodes: " << n << std::endl;
 
   out_offsets = (uintT *)(mmap_file + sizeof(bool) + 2 * sizeof(long));
   auto v_out_data = gbbs::new_array_no_init<vertex_data>(n);
@@ -327,15 +342,19 @@ read_gap_weighted_asymmetric_graph(
     v_out_data[i].offset = out_offsets[i];
     v_out_data[i].degree = out_offsets[i + 1] - v_out_data[i].offset;
   });
-  std::cout << v_out_data[n - 1].degree << std::endl;
-  std::cout << "out_offsets" << std::endl;
 
   uint64_t skip = sizeof(bool) + 2 * sizeof(uintT) + (n + 1) * sizeof(uintT);
   out_edges = (id_and_weight *)(mmap_file + skip);
-  std::cout << "out_edges" << std::endl;
+  id_and_weight_struct *test = (id_and_weight_struct *)(mmap_file + skip);
 
-  std::cout << std::get<0>(out_edges[0]) << "," << std::get<1>(out_edges[0])
+  std::cout << "Printing first out-edge as a check:" << std::endl;
+  std::cout << "id_weight_tuple[0]: " << std::get<0>(out_edges[0]);
+  std::cout << " - id_weight_tuple[1]: " << std::get<1>(out_edges[0])
             << std::endl;
+
+  std::cout << "Printing first out-edge as a check using struct:" << std::endl;
+  std::cout << "id_weight_struct[0]: " << test[0].e;
+  std::cout << " - id_weight_struct[1]: " << test[0].w << std::endl;
 
   skip += (m * 2 * sizeof(uintE));
   in_offsets = (uintT *)(mmap_file + skip);
@@ -344,11 +363,9 @@ read_gap_weighted_asymmetric_graph(
     v_in_data[i].offset = in_offsets[i];
     v_in_data[i].degree = in_offsets[i + 1] - v_in_data[i].offset;
   });
-  std::cout << "in_offsets" << std::endl;
 
   skip += ((n + 1) * sizeof(uintT));
   in_edges = (id_and_weight *)(mmap_file + skip);
-  std::cout << "in_edges" << std::endl;
 
   return asymmetric_graph<asymmetric_vertex, weight_type>(
       v_out_data, v_in_data, n, m,

@@ -1,4 +1,5 @@
 #include <exception>
+#include <iostream>
 #include <vector>
 
 #include "converter.h"
@@ -9,6 +10,12 @@ namespace gbbs {
 namespace {
 
 int RunGAPConverter(int argc, char *argv[]) {
+#ifdef USE_FLOAT
+  typedef float weight_type;
+#else
+  typedef uintE weight_type;
+#endif
+
   const std::string kCommandLineHelpString{
       "Usage: ./gap_converter [-s] [-w] -i <input file> -o <output file>\n"
       "\n"
@@ -27,7 +34,7 @@ int RunGAPConverter(int argc, char *argv[]) {
   const commandLine parameters{argc, argv, kCommandLineHelpString};
   const char *const input_file{parameters.getOptionValue(kInputFlag)};
   const char *const output_file{parameters.getOptionValue(kOutputFlag)};
-  const bool integer_weighted{parameters.getOption("-w")};
+  const bool weighted{parameters.getOption("-w")};
 
   bool is_symmetric_graph = false;
 
@@ -50,23 +57,60 @@ int RunGAPConverter(int argc, char *argv[]) {
   std::cout << "GAP graph is "
             << (is_symmetric_graph ? "undirected" : "directed") << std::endl;
 
-  if (integer_weighted) {
+  if (weighted) {
     if (is_symmetric_graph) {
-      auto sym_weighted = gbbs_io::read_gap_weighted_symmetric_graph<uintE>(
-          input_file, true, true);
+      auto sym_weighted =
+          gbbs_io::read_gap_weighted_symmetric_graph<weight_type>(input_file,
+                                                                  true, true);
       std::cout << "created in memory graph" << std::endl;
+
+      int skipped = 0;
+      auto first_ten = std::min(10ul, sym_weighted.n);
+      for (uintE i = 0, v = 0; i < first_ten && skipped < 100; i++, v++) {
+        if (sym_weighted.get_vertex(i).out_neighbors().degree == 0) {
+          std::cout << "Vertex " << v << " has no out-neighbors." << std::endl;
+          i--;
+          skipped++;
+          continue;
+        }
+        auto neigh = sym_weighted.get_vertex(v).out_neighbors();
+        auto first_five_neighs = std::min(5u, neigh.degree);
+        std::cout << "Vertex " << v << " has out-degree: " << neigh.degree
+                  << std::endl;
+        for (uintE j = 0; j < first_five_neighs; j++) {
+
+          std::cout << "neigh(" << j << "): " << neigh.get_neighbor(0);
+          std::cout << " - edge weight: " << neigh.get_weight(j) << std::endl;
+        }
+      }
+
       binary_format::write_graph_binary_format(sym_weighted, out,
                                                is_symmetric_graph);
       std::cout << "graph outputted" << std::endl;
 
     } else {
-      auto asym_weighted = gbbs_io::read_gap_weighted_asymmetric_graph<uintE>(
-          input_file, true, true);
+      auto asym_weighted =
+          gbbs_io::read_gap_weighted_asymmetric_graph<weight_type>(input_file,
+                                                                   true, true);
       std::cout << "created in memory graph" << std::endl;
-      auto neigh = asym_weighted.get_vertex(0).out_neighbors();
-      std::cout << neigh.get_neighbor(0) << "," << neigh.get_weight(0)
-                << std::endl;
 
+      auto first_ten = std::min(10ul, asym_weighted.n);
+      for (uintE i = 0, v = 0; i < first_ten; i++, v++) {
+        if (asym_weighted.get_vertex(i).out_neighbors().degree == 0) {
+          std::cout << "Vertex " << v << " has no out-neighbors." << std::endl;
+          i--;
+          continue;
+        }
+        auto neigh = asym_weighted.get_vertex(v).out_neighbors();
+        auto first_five_neighs = std::min(5u, neigh.degree);
+        std::cout << "Vertex " << v << " has out-degree: " << neigh.degree
+                  << std::endl;
+        for (uintE j = 0; j < first_five_neighs; j++) {
+
+          std::cout << "neigh(" << j << "): " << neigh.get_neighbor(0);
+          std::cout << " - edge weight: " << neigh.get_weight(j) << std::endl;
+        }
+      }
       binary_format::write_graph_binary_format(asym_weighted, out,
                                                is_symmetric_graph);
       std::cout << "graph outputted" << std::endl;

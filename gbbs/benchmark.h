@@ -5,6 +5,12 @@
 #include "graph_io.h"
 #include "source.h"
 
+#ifdef USE_FLOAT
+typedef float weight_type;
+#else
+typedef gbbs::intE weight_type;
+#endif
+
 #define run_app(G, APP, mutates, rounds)                                       \
   double total_time = 0.0;                                                     \
   for (size_t r = 0; r < rounds; r++) {                                        \
@@ -278,21 +284,21 @@
     size_t num_sources = P.getOptionLongValue("-sources", 1);                  \
     if (compressed) {                                                          \
       if (symmetric) {                                                         \
-        auto G = gbbs::gbbs_io::read_compressed_symmetric_graph<gbbs::intE>(   \
+        auto G = gbbs::gbbs_io::read_compressed_symmetric_graph<weight_type>(  \
             iFile, mmap);                                                      \
         run_traversal_app(G, APP, mutates, rounds, num_sources)                \
       } else {                                                                 \
-        auto G = gbbs::gbbs_io::read_compressed_asymmetric_graph<gbbs::intE>(  \
+        auto G = gbbs::gbbs_io::read_compressed_asymmetric_graph<weight_type>( \
             iFile, mmap);                                                      \
         run_traversal_app(G, APP, mutates, rounds, num_sources)                \
       }                                                                        \
     } else {                                                                   \
       if (symmetric) {                                                         \
-        auto G = gbbs::gbbs_io::read_weighted_symmetric_graph<gbbs::intE>(     \
+        auto G = gbbs::gbbs_io::read_weighted_symmetric_graph<weight_type>(    \
             iFile, mmap, binary);                                              \
         run_traversal_app(G, APP, mutates, rounds, num_sources)                \
       } else {                                                                 \
-        auto G = gbbs::gbbs_io::read_weighted_asymmetric_graph<gbbs::intE>(    \
+        auto G = gbbs::gbbs_io::read_weighted_asymmetric_graph<weight_type>(   \
             iFile, mmap, binary);                                              \
         run_traversal_app(G, APP, mutates, rounds, num_sources)                \
       }                                                                        \
