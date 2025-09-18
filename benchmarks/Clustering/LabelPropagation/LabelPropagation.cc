@@ -21,61 +21,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// Usage:
-// numactl -i all ./PageRank -s -m -rounds 3 twitter_SJ
-// flags:
-//   optional:
-//     -eps : the epsilon to use for convergence (1e-6 by default)
-//     -l_eps : the local epsilon to use for convergence (1e-2 by default);
-//      used by PageRankDelta only
-//     -damping_factor : the damping factor used in the PageRank updates (0.85
-//      by default)
-//     -c : indicate that the graph is compressed
-//     -m : indicate that the graph should be mmap'd
-//     -s : indicate that the graph is symmetric
-
-#include "PageRank.h"
-#include "PageRank_delta.h"
-#include "PageRank_edgeMapReduce.h"
-
-#include <cstddef>
-#include <iostream>
-
-
-#include "gbbs/benchmark.h"
-#include "gbbs/bridge.h"
-#include "gbbs/helpers/parse_command_line.h"
+#include "LabelPropagation.h"
 
 namespace gbbs {
 
 template <class Graph>
-double PageRank_runner(Graph& G, commandLine P) {
-  std::cout << "### Application: PageRank" << std::endl;
+double LabelPropagation_runner(Graph& G, commandLine P) {
+  std::cout << "### Application: LabelPropagation" << std::endl;
   std::cout << "### Graph: " << P.getArgument(0) << std::endl;
   std::cout << "### Threads: " << num_workers() << std::endl;
   std::cout << "### n: " << G.n << std::endl;
   std::cout << "### m: " << G.m << std::endl;
-  std::cout << "### Params: -eps = " << P.getOptionDoubleValue("-eps", 0.000001)
-            << std::endl;
-  std::cout << "### Params: -leps = " << P.getOptionDoubleValue("-leps", 0.01)
-            << std::endl;
-  std::cout << "### Params: -damping_factor = "
-            << P.getOptionDoubleValue("-damping_factor", 0.85) << std::endl;
   std::cout << "### ------------------------------------" << std::endl;
 
   timer t;
   t.start();
-  double eps = P.getOptionDoubleValue("-eps", 0.000001);
-  double local_eps = P.getOptionDoubleValue("-leps", 0.01);
-  double damping_factor = P.getOptionDoubleValue("-damping_factor", 0.85);
-  size_t iters = P.getOptionLongValue("-iters", 100);
-  if (P.getOptionValue("-em")) {
-    auto ret = PageRank_edgeMap(G, eps, /*sources=*/{}, damping_factor, iters);
-  } else if (P.getOptionValue("-delta")) {
-    auto ret = delta::PageRankDelta(G, eps, local_eps, damping_factor, iters);
-  } else {
-    auto ret = PageRank_edgeMapReduce(G, eps, /*sources=*/{}, damping_factor, iters);
-  }
+  auto labels = LabelPropagation(G);
   double tt = t.stop();
 
   std::cout << "### Running Time: " << tt << std::endl;
@@ -84,4 +45,4 @@ double PageRank_runner(Graph& G, commandLine P) {
 
 }  // namespace gbbs
 
-generate_main(gbbs::PageRank_runner, false);
+generate_main(gbbs::LabelPropagation_runner, false);

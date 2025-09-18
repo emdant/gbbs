@@ -20,389 +20,293 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+//
+// This file provides an implementation of the power-iteration kernel for
+// computing PageRank. The implementation works on both undirected and directed
+// graphs.
+//
+// The code handles vertices with zero weighted out-degree by giving them
+// (implicit) out-edges to all source nodes (by default, all nodes are
+// considered source nodes). The implementation sums up the mass of the zero
+// weighted out-degree vertices in each iteration and spreads it evenly across
+// all source nodes.
+//
+// Note that we provide some alternate implementations of the same algorithm in
+// other files in this package (PageRank_edgeMapReduce and PageRank_delta). The
+// difference for the edgeMapReduce implementration are in how the matrix-vector
+// product is computed (in terms of cache-locality). The PageRank_delta
+// implementation implements an approximate version of PageRank that is faster
+// in many cases but is not yet carefully tested. The difference between
+// implementations (1) and (2) are some optimizations used to speed up how the
+// matrix-vector product works. We should carefully benchmark the two
+// implementations again, but from a few years ago (~2020), the PageRank code
+// was consistently faster than PageRank_edgeMap by 20--30% on the WDC2012
+// graph.
+
 #pragma once
 
-#include "gbbs/edge_map_reduce.h"
-#include "gbbs/gbbs.h"
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <iostream>
+#include <type_traits>
+#include <utility>
 
-#include <math.h>
+#include "absl/container/flat_hash_set.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "gbbs/bridge.h"
+#include "gbbs/edge_map_data.h"
+#include "gbbs/flags.h"
+#include "gbbs/helpers/assert.h"
+#include "gbbs/helpers/progress_reporting.h"
+#include "gbbs/helpers/status_macros.h"
+#include "gbbs/macros.h"
+#include "gbbs/vertex_subset.h"
+#include "parlay/monoid.h"
+#include "parlay/sequence.h"
 
 namespace gbbs {
 
+namespace pagerank_utils {
+
+inline void ValidatePageRankParameters(const double eps,
+                                       const double damping_factor) {
+  ASSERT(eps >= 0.0);
+  ASSERT(0.0 <= damping_factor && damping_factor < 1.0);
+}
+
+// Returns a boolean indicating whether `Graph` is weighted.
+template <class Graph>
+constexpr bool IsWeighted() {
+  return !std::is_same_v<typename Graph::weight_type, gbbs::empty>;
+}
+
+}  // namespace pagerank_utils
+
+// edgeMap struct used for distributing `_p_curr[s]`, for each vertex `s` in the
+// considered subset of nodes (which is assumed to contain only nodes with
+// non-zero weighted out-degree) to the `_p_next` values of its out-neighbors.
+// The amount distributed to each out-neighbor is proportional to the weight of
+// the edge from `s` to the out-neighbor. For unweighted graphs, we treat all
+// edges as having weight 1.
 template <class Graph>
 struct PR_F {
   using W = typename Graph::weight_type;
-  double *p_curr, *p_next;
-  Graph& G;
-  PR_F(double* _p_curr, double* _p_next, Graph& G)
-      : p_curr(_p_curr), p_next(_p_next), G(G) {}
+  const double* p_curr;
+  double* p_next;
+  const Graph& graph;
+  const double* weighted_out_degrees;  // Used only if `Graph` is weighted.
+
+  // `_p_curr` and `_p_next` must have size equal to `G.n`. The same applies to
+  // `weighted_out_degrees` if `Graph` is weighted; otherwise,
+  // `weighted_out_degrees` is ignored.
+  PR_F(const double* _p_curr, double* _p_next, const Graph& graph,
+       const double* weighted_out_degrees)
+      : p_curr(_p_curr),
+        p_next(_p_next),
+        graph(graph),
+        weighted_out_degrees(weighted_out_degrees) {}
+
   inline bool update(
       const uintE& s, const uintE& d,
       const W& wgh) {  // update function applies PageRank equation
-    p_next[d] += p_curr[s] / G.get_vertex(s).out_degree();
-    return 1;
+    p_next[d] += ContributionFromInNeighbor(s, wgh);
+    return true;
   }
+
   inline bool updateAtomic(const uintE& s, const uintE& d,
                            const W& wgh) {  // atomic Update
-    gbbs::fetch_and_add(&p_next[d], p_curr[s] / G.get_vertex(s).out_degree());
-    return 1;
+    gbbs::fetch_and_add(&p_next[d], ContributionFromInNeighbor(s, wgh));
+    return true;
   }
+
   inline bool cond(intT d) { return cond_true(d); }
-};
 
-// vertex map function to update its p value according to PageRank equation
-struct PR_Vertex_F {
-  double damping;
-  double addedConstant;
-  double* p_curr;
-  double* p_next;
-  PR_Vertex_F(double* _p_curr, double* _p_next, double _damping, intE n)
-      : damping(_damping),
-        addedConstant((1 - _damping) * (1 / (double)n)),
-        p_curr(_p_curr),
-        p_next(_p_next) {}
-  inline bool operator()(uintE i) {
-    p_next[i] = damping * p_next[i] + addedConstant;
-    return 1;
+ private:
+  // Returns the amount of mass that node `s` sends over an out-edge with weight
+  // `wgh`.
+  inline double ContributionFromInNeighbor(const uintE& s, const W& wgh) {
+    // Note: the (unweighted or weighted) out-degree of `s` is assumed be
+    // non-zero, so the division below is safe.
+    if constexpr (pagerank_utils::IsWeighted<Graph>()) {
+      return p_curr[s] * (wgh / weighted_out_degrees[s]);
+    } else {
+      return p_curr[s] / graph.get_vertex(s).out_degree();
+    }
   }
 };
 
-// resets p
-struct PR_Vertex_Reset {
-  double* p_curr;
-  PR_Vertex_Reset(double* _p_curr) : p_curr(_p_curr) {}
-  inline bool operator()(uintE i) {
-    p_curr[i] = 0.0;
-    return 1;
-  }
-};
-
+// Power iteration implementation of PageRank that uses Ligra's edgeMap
+// functionality to perform sparse matrix-vector (SpMV) products. The dense
+// implementation of edgeMap should be called in every iteration, which will
+// require the in-edges of the graph being materialized (this expectation is met
+// if using an undirected graph, or if the directed graph has both
+// in-/out-edges materialized.
+//
+// The last argument should only be set to false if the graph you are using does
+// not have its in-edges materialized.
+//
+// The convergence threshold `eps` must be nonnegative. The algorithm stops when
+// the L1 distance between the PageRank values (seen as a vector with one entry
+// per node) in two consecutive iterations becomes smaller than `eps * (number
+// of nodes in G)`, or when `max_iters` iterations have been executed (whichever
+// comes first).
+// `damping_factor` must be in the range [0, 1).
+//
+// If the source vector has non-zero length, the algorithm:
+// (1) sets the teleportation probabilities (i.e., the personalization vector)
+// to 1/|sources| for each source, and 0 for any non-source, and
+// (2) sets the initial PageRank scores to 1/|sources| for each source, and 0
+// for any non-source.
+//
+// If the source vector is empty, the algorithm sets the teleportation
+// probabilities and the initial PageRank values to 1/n for each node.
+//
+// If provided,`report_progress` will be called periodically to report the
+// progress of the computation.
 template <class Graph>
-sequence<double> PageRank_edgeMap(Graph& G, double eps = 0.000001,
-                                  size_t max_iters = 100) {
+absl::StatusOr<sequence<double>> PageRank_edgeMap(
+    const Graph& G, double eps = 0.000001, absl::Span<const uintE> sources = {},
+    double damping_factor = 0.85, size_t max_iters = 100,
+    bool has_in_edges = true,
+    std::optional<ReportProgressCallback> report_progress = std::nullopt) {
+  pagerank_utils::ValidatePageRankParameters(eps, damping_factor);
   const uintE n = G.n;
-  const double damping = 0.85;
+  if (n == 0) {
+    if (report_progress.has_value()) (*report_progress)(1.0);
+    return sequence<double>();
+  }
 
-  double one_over_n = 1 / (double)n;
-  auto p_curr = sequence<double>(n, one_over_n);
-  auto p_next = sequence<double>(n, static_cast<double>(0));
-  auto frontier = sequence<bool>(n, true);
+  double one_over_num_sources = 1 / (double)n;
+  // Current PageRank values.
+  sequence<double> p_curr;
 
-  // read from special array of just degrees
+  absl::flat_hash_set<uintE> sources_set(sources.begin(), sources.end());
+  if (!sources.empty()) {
+    // If the source set is non-empty, we need to set the initial mass over only
+    // the sources.
+    one_over_num_sources = 1 / (double)sources.size();
+    p_curr = parlay::sequence<double>(n);
+    parlay::parallel_for(0, sources.size(), [&](size_t i) {
+      p_curr[sources[i]] = one_over_num_sources;
+    });
+  } else {
+    p_curr = sequence<double>(n, one_over_num_sources);
+  }
 
-  auto degrees = sequence<uintE>::from_function(
-      n, [&](size_t i) { return G.get_vertex(i).out_degree(); });
+  // Tentative PageRank values for the next iteration.
+  auto p_next = sequence<double>(n, 0.0);
 
-  vertexSubset Frontier(n, n, std::move(frontier));
+  // Compute the weighted out-degrees if the graph is weighted.
+  sequence<double> weighted_out_degrees;
+  if constexpr (pagerank_utils::IsWeighted<Graph>()) {
+    auto get_edge_weight = [](uintE unused_source_id, uintE unused_target_id,
+                              const typename Graph::weight_type weight) {
+      return double{weight};
+    };
+    weighted_out_degrees =
+        sequence<double>::from_function(n, [&](const size_t i) {
+          return G.get_vertex(i).out_neighbors().reduce(get_edge_weight,
+                                                        parlay::plus<double>());
+        });
+  }
 
-  size_t iter = 0;
-  while (iter++ < max_iters) {
+  auto is_non_dangling_node = sequence<bool>::from_function(n, [&](uintE v) {
+    if constexpr (pagerank_utils::IsWeighted<Graph>()) {
+      return weighted_out_degrees.at(v) != 0.0;
+    } else {
+      return G.get_vertex(v).out_degree() != 0;
+    }
+  });
+  // Nodes with zero (weighted) out-degree.
+  parlay::sequence<uintE> dangling_nodes =
+      parlay::pack_index<uintE>(parlay::delayed_seq<bool>(
+          n, [&](size_t i) { return !is_non_dangling_node.at(i); }));
+  // Nodes that will propagate weight to their out-neighbors at each iteration.
+  vertexSubset Frontier(n, n, std::move(is_non_dangling_node));
+
+  // If the graph does not have in-edges materialized, use the dense-forward
+  // setting.
+  gbbs::flags flags = (!has_in_edges) ? gbbs::dense_forward : 0;
+  // edgeMap does not require returning an output vertex subset.
+  flags |= gbbs::no_output;
+
+  std::optional<gbbs::IterationProgressReporter> progress_reporter;
+  if (report_progress.has_value()) {
+    progress_reporter.emplace(
+        gbbs::IterationProgressReporter(*std::move(report_progress), max_iters,
+                                        /*has_preprocessing=*/true));
+    RETURN_IF_ERROR(progress_reporter->PreprocessingComplete());
+  }
+
+  // Each iteration uses `p_curr` to compute `p_next`, then swaps `p_curr` and
+  // `p_next`, and sets `p_next` to zero in preparation for the next iteration.
+  for (size_t iter = 0; iter < max_iters; ++iter) {
     gbbs_debug(timer t; t.start(););
-    // SpMV
-    edgeMap(G, Frontier, PR_F<Graph>(p_curr.begin(), p_next.begin(), G), 0,
-            no_output);
-    vertexMap(Frontier,
-              PR_Vertex_F(p_curr.begin(), p_next.begin(), damping, n));
 
-    // Check convergence: compute L1-norm between p_curr and p_next
+    // Sum of the PageRank values of the dangling nodes.
+    double dangling_sum = parlay::reduce(parlay::delayed_map(
+        dangling_nodes, [&](uintE v) { return p_curr[v]; }));
+
+    // SpMV
+    edgeMap(G, Frontier,
+            PR_F<Graph>(p_curr.begin(), p_next.begin(), G,
+                        weighted_out_degrees.data()),
+            /*threshold=*/0, flags);
+    if (sources.empty()) {
+      // Updates p_next by assuming each node has an equal probability being
+      // teleported to, and also takes into account the contribution from nodes
+      // with no outgoing edges.
+      double added_constant = (1 - damping_factor) * one_over_num_sources;
+      parlay::parallel_for(0, n, [&](size_t i) {
+        p_next[i] += dangling_sum * one_over_num_sources;
+        p_next[i] = damping_factor * p_next[i] + added_constant;
+      });
+    } else {
+      // When we have sources, the teleportation probabilities are now uniform
+      // across the source set. If desired, we could update this logic in the
+      // future to use a user-specified distribution.
+      // TODO(laxmand): update this case so that we use a bit-vector for the
+      // sources since they are read-only.
+      one_over_num_sources = 1 / (double)sources.size();
+      double added_constant = (1 - damping_factor) * one_over_num_sources;
+      parlay::parallel_for(0, n, [&](size_t i) {
+        if (sources_set.contains(i)) {
+          p_next[i] += dangling_sum * one_over_num_sources;
+          p_next[i] = damping_factor * p_next[i] + added_constant;
+        } else {
+          p_next[i] = damping_factor * p_next[i];
+        }
+      });
+    }
+
+    // Check convergence: compute L1-norm between p_curr and p_next.
     auto differences = parlay::delayed_seq<double>(
         n, [&](size_t i) { return fabs(p_curr[i] - p_next[i]); });
     double L1_norm = parlay::reduce(differences);
-    if (L1_norm < eps) break;
+
+    // Swap p_curr and p_next. The final vector returned will be p_curr.
+    std::swap(p_curr, p_next);
+    if (L1_norm < eps * n) {
+      if (progress_reporter.has_value()) {
+        RETURN_IF_ERROR(progress_reporter->IterationsDoneEarly());
+      }
+      break;
+    }
 
     gbbs_debug(std::cout << "L1_norm = " << L1_norm << std::endl;);
     // Reset p_curr
-    parallel_for(0, n, [&](size_t i) { p_curr[i] = static_cast<double>(0); });
-    std::swap(p_curr, p_next);
+    parallel_for(0, n, [&](size_t i) { p_next[i] = 0.0; });
 
     gbbs_debug(t.stop(); t.next("iteration time"););
+    if (progress_reporter.has_value()) {
+      RETURN_IF_ERROR(progress_reporter->IterationComplete(iter));
+    }
   }
-  auto max_pr = parlay::reduce_max(p_next);
-  std::cout << "max_pr = " << max_pr << std::endl;
-  return p_next;
+  gbbs_debug(auto max_pr = parlay::reduce_max(p_curr);
+             std::cout << "max_pr = " << max_pr << std::endl;);
+  return p_curr;
 }
-
-template <class Graph>
-sequence<double> PageRank(Graph& G, double eps = 0.000001,
-                          size_t max_iters = 100) {
-  using W = typename Graph::weight_type;
-  const uintE n = G.n;
-  const double damping = 0.85;
-  const double addedConstant = (1 - damping) * (1 / static_cast<double>(n));
-
-  double one_over_n = 1 / (double)n;
-  auto p_curr = sequence<double>(n, one_over_n);
-  auto p_next = sequence<double>(n, static_cast<double>(0));
-  auto frontier = sequence<bool>(n, true);
-  auto p_div = sequence<double>::from_function(n, [&](size_t i) -> double {
-    return one_over_n / static_cast<double>(G.get_vertex(i).out_degree());
-  });
-  auto p_div_next = sequence<double>(n);
-
-  // read from special array of just degrees
-
-  auto degrees = sequence<uintE>::from_function(
-      n, [&](size_t i) { return G.get_vertex(i).out_degree(); });
-
-  vertexSubset Frontier(n, n, std::move(frontier));
-  auto EM = EdgeMap<double, Graph>(
-      G, std::make_tuple(UINT_E_MAX, static_cast<double>(0)),
-      (size_t)G.m / 1000);
-
-  auto cond_f = [&](const uintE& v) { return true; };
-  auto map_f = [&](const uintE& d, const uintE& s, const W& wgh) -> double {
-    return p_div[s];
-    //    return p_curr[s] / degrees[s];
-  };
-  auto reduce_f = [&](double l, double r) { return l + r; };
-  auto apply_f = [&](
-      std::tuple<uintE, double> k) -> std::optional<std::tuple<uintE, double>> {
-    const uintE& u = std::get<0>(k);
-    const double& contribution = std::get<1>(k);
-    p_next[u] = damping * contribution + addedConstant;
-    p_div_next[u] = p_next[u] / static_cast<double>(degrees[u]);
-    return std::nullopt;
-  };
-
-  size_t iter = 0;
-  while (iter++ < max_iters) {
-    timer t;
-    t.start();
-    // SpMV
-    timer tt;
-    tt.start();
-    EM.template edgeMapReduce_dense<double, double>(
-        Frontier, cond_f, map_f, reduce_f, apply_f, 0.0, no_output);
-    tt.stop();
-    tt.next("em time");
-
-    // Check convergence: compute L1-norm between p_curr and p_next
-    auto differences = parlay::delayed_seq<double>(n, [&](size_t i) {
-      auto d = p_curr[i];
-      p_curr[i] = 0;
-      return fabs(d - p_next[i]);
-    });
-    double L1_norm = parlay::reduce(differences, parlay::plus<double>());
-    if (L1_norm < eps) break;
-    gbbs_debug(std::cout << "L1_norm = " << L1_norm << std::endl;);
-
-    // Reset p_curr and p_div
-    std::swap(p_curr, p_next);
-    std::swap(p_div, p_div_next);
-    t.stop();
-    t.next("iteration time");
-  }
-  auto max_pr = parlay::reduce_max(p_next);
-  std::cout << "max_pr = " << max_pr << std::endl;
-  return p_next;
-}
-
-namespace delta {
-
-struct delta_and_degree {
-  double delta;
-  double delta_over_degree;
-};
-
-template <class Graph>
-struct PR_Delta_F {
-  using W = typename Graph::weight_type;
-  Graph& G;
-  delta_and_degree* Delta;
-  double* nghSum;
-  PR_Delta_F(Graph& G, delta_and_degree* _Delta, double* _nghSum)
-      : G(G), Delta(_Delta), nghSum(_nghSum) {}
-  inline bool update(const uintE& s, const uintE& d, const W& wgh) {
-    double oldVal = nghSum[d];
-    nghSum[d] += Delta[s].delta_over_degree;  // Delta[s].delta/Delta[s].degree;
-                                              // // V[s].out_degree();
-    return oldVal == 0;
-  }
-  inline bool updateAtomic(const uintE& s, const uintE& d, const W& wgh) {
-    volatile double oldV, newV;
-    do {  // basically a fetch-and-add
-      oldV = nghSum[d];
-      newV = oldV + Delta[s].delta_over_degree;  // Delta[s]/V[s].out_degree();
-    } while (!gbbs::atomic_compare_and_swap(&nghSum[d], oldV, newV));
-    return oldV == 0.0;
-  }
-  inline bool cond(uintE d) { return cond_true(d); }
-};
-
-template <class Graph, class E>
-void sparse_or_dense(Graph& G, E& EM, vertexSubset& Frontier,
-                     delta_and_degree* Delta, double* nghSum, const flags fl) {
-  using W = typename Graph::weight_type;
-
-  if (Frontier.size() > G.n / 5) {
-    Frontier.toDense();
-
-    auto cond_f = [&](size_t i) { return true; };
-    auto map_f = [&](const uintE& s, const uintE& d, const W& wgh) -> double {
-      if (Frontier.d[d]) {
-        return Delta[d].delta_over_degree;  // Delta[d]/G.V[d].out_degree();
-      } else {
-        return static_cast<double>(0);
-      }
-    };
-    auto reduce_f = [&](double l, double r) { return l + r; };
-    auto apply_f = [&](std::tuple<uintE, double> k)
-        -> std::optional<std::tuple<uintE, gbbs::empty>> {
-          const uintE& u = std::get<0>(k);
-          const double& contribution = std::get<1>(k);
-          nghSum[u] = contribution;
-          return std::nullopt;
-        };
-    double id = 0.0;
-
-    flags dense_fl = fl;
-    dense_fl ^= in_edges;  // todo: check
-    timer dt;
-    dt.start();
-    EM.template edgeMapReduce_dense<gbbs::empty, double>(
-        Frontier, cond_f, map_f, reduce_f, apply_f, id, dense_fl | no_output);
-
-    dt.stop();
-    dt.next("dense time");
-  } else {
-    edgeMap(G, Frontier, PR_Delta_F<Graph>(G, Delta, nghSum), G.m / 2,
-            no_output);
-  }
-}
-
-template <class G>
-struct PR_Vertex_F_FirstRound {
-  double damping, addedConstant, one_over_n, epsilon2;
-  double* p;
-  delta_and_degree* Delta;
-  double* nghSum;
-  G& get_degree;
-  PR_Vertex_F_FirstRound(double* _p, delta_and_degree* _Delta, double* _nghSum,
-                         double _damping, double _one_over_n, double _epsilon2,
-                         G& get_degree)
-      : damping(_damping),
-        addedConstant((1 - _damping) * _one_over_n),
-        one_over_n(_one_over_n),
-        epsilon2(_epsilon2),
-        p(_p),
-        Delta(_Delta),
-        nghSum(_nghSum),
-        get_degree(get_degree) {}
-  inline bool operator()(uintE i) {
-    double pre_init = damping * nghSum[i] + addedConstant;
-    p[i] += pre_init;
-    double new_delta =
-        pre_init - one_over_n;  // subtract off delta from initialization
-    Delta[i].delta = new_delta;
-    Delta[i].delta_over_degree = new_delta / get_degree(i);
-    return (new_delta > epsilon2 * p[i]);
-  }
-};
-
-template <class G>
-auto make_PR_Vertex_F_FirstRound(double* p, delta_and_degree* delta,
-                                 double* nghSum, double damping,
-                                 double one_over_n, double epsilon2,
-                                 G& get_degree) {
-  return PR_Vertex_F_FirstRound<G>(p, delta, nghSum, damping, one_over_n,
-                                   epsilon2, get_degree);
-}
-
-template <class G>
-struct PR_Vertex_F {
-  double damping, epsilon2;
-  double* p;
-  delta_and_degree* Delta;
-  double* nghSum;
-  G& get_degree;
-  PR_Vertex_F(double* _p, delta_and_degree* _Delta, double* _nghSum,
-              double _damping, double _epsilon2, G& get_degree)
-      : damping(_damping),
-        epsilon2(_epsilon2),
-        p(_p),
-        Delta(_Delta),
-        nghSum(_nghSum),
-        get_degree(get_degree) {}
-  inline bool operator()(uintE i) {
-    double new_delta = nghSum[i] * damping;
-    Delta[i].delta = new_delta;
-    Delta[i].delta_over_degree = new_delta / get_degree(i);
-
-    if (fabs(Delta[i].delta) > epsilon2 * p[i]) {
-      p[i] += new_delta;
-      return 1;
-    } else
-      return 0;
-  }
-};
-
-template <class G>
-auto make_PR_Vertex_F(double* p, delta_and_degree* delta, double* nghSum,
-                      double damping, double epsilon2, G& get_degree) {
-  return PR_Vertex_F<G>(p, delta, nghSum, damping, epsilon2, get_degree);
-}
-
-template <class Graph>
-sequence<double> PageRankDelta(Graph& G, double eps = 0.000001,
-                               double local_eps = 0.01,
-                               size_t max_iters = 100) {
-  const long n = G.n;
-  const double damping = 0.85;
-
-  double one_over_n = 1 / (double)n;
-  auto p = sequence<double>(n);
-  auto Delta = sequence<delta_and_degree>(n);
-  auto nghSum = sequence<double>(n);
-  auto frontier = sequence<bool>(n);
-  parallel_for(0, n, [&](size_t i) {
-    uintE degree = G.get_vertex(i).out_degree();
-    p[i] = 0.0;                   // one_over_n;
-    Delta[i].delta = one_over_n;  // initial delta propagation from each vertex
-    Delta[i].delta_over_degree = one_over_n / degree;
-    nghSum[i] = 0.0;
-    frontier[i] = 1;
-  });
-
-  auto get_degree = [&](size_t i) { return G.get_vertex(i).out_degree(); };
-  auto EM = EdgeMap<double, Graph>(G, std::make_tuple(UINT_E_MAX, (double)0.0),
-                                   (size_t)G.m / 1000);
-  vertexSubset Frontier(n, n, std::move(frontier));
-  auto all = sequence<bool>(n, true);
-  vertexSubset All(n, n, std::move(all));  // all vertices
-
-  size_t round = 0;
-  while (round++ < max_iters) {
-    timer t;
-    t.start();
-    sparse_or_dense(G, EM, Frontier, Delta.begin(), nghSum.begin(), no_output);
-    vertexSubset active =
-        (round == 1)
-            ? vertexFilter(All, delta::make_PR_Vertex_F_FirstRound(
-                                    p.begin(), Delta.begin(), nghSum.begin(),
-                                    damping, one_over_n, local_eps, get_degree))
-            : vertexFilter(All, delta::make_PR_Vertex_F(
-                                    p.begin(), Delta.begin(), nghSum.begin(),
-                                    damping, local_eps, get_degree));
-
-    // Check convergence: compute L1-norm between p_curr and p_next
-    auto differences = parlay::delayed_seq<double>(
-        n, [&](size_t i) { return fabs(Delta[i].delta); });
-    double L1_norm = parlay::reduce(differences, parlay::plus<double>());
-    if (L1_norm < eps) break;
-    gbbs_debug(std::cout << "L1_norm = " << L1_norm << std::endl;);
-
-    // Reset
-    parallel_for(0, n, [&](size_t i) { nghSum[i] = static_cast<double>(0); });
-
-    Frontier = std::move(active);
-    gbbs_debug(t.stop(); t.next("iteration time"););
-  }
-  auto max_pr = parlay::reduce_max(p);
-  std::cout << "max_pr = " << max_pr << std::endl;
-
-  std::cout << "Num rounds = " << round << std::endl;
-  return p;
-}
-}  // namespace delta
 
 }  // namespace gbbs
