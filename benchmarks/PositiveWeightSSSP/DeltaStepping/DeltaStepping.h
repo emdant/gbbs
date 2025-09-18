@@ -23,28 +23,29 @@
 
 #pragma once
 
-#include <cmath>
 #include "gbbs/bucket.h"
 #include "gbbs/gbbs.h"
+#include <atomic>
+#include <cmath>
 
 namespace gbbs {
+// std::atomic<std::size_t> visits{0};
 
-template <class W, class Distance>
-struct Visit_F {
-  sequence<std::pair<Distance, bool>>& dists;
-  Visit_F(sequence<std::pair<Distance, bool>>& _dists) : dists(_dists) {}
+template <class W, class Distance> struct Visit_F {
+  sequence<std::pair<Distance, bool>> &dists;
+  Visit_F(sequence<std::pair<Distance, bool>> &_dists) : dists(_dists) {}
 
-  inline std::optional<Distance> update(const uintE& s, const uintE& d,
-                                        const W& w) {
+  inline std::optional<Distance> update(const uintE &s, const uintE &d,
+                                        const W &w) {
     Distance dist = dists[d].first;
     Distance n_dist;
-    if
-      constexpr(std::is_same<W, gbbs::empty>()) { n_dist = dists[s].first + 1; }
-    else {
+    if constexpr (std::is_same<W, gbbs::empty>()) {
+      n_dist = dists[s].first + 1;
+    } else {
       n_dist = dists[s].first + w;
     }
     if (n_dist < dist) {
-      if (!dists[d].second) {  // First visitor
+      if (!dists[d].second) { // First visitor
         dists[d] = {n_dist, true};
         return std::optional<Distance>(dist);
       }
@@ -53,32 +54,34 @@ struct Visit_F {
     return std::nullopt;
   }
 
-  inline std::optional<Distance> updateAtomic(const uintE& s, const uintE& d,
-                                              const W& w) {
+  inline std::optional<Distance> updateAtomic(const uintE &s, const uintE &d,
+                                              const W &w) {
+    // visits++;
     Distance dist = dists[d].first;
     Distance n_dist;
-    if
-      constexpr(std::is_same<W, gbbs::empty>()) { n_dist = dists[s].first + 1; }
-    else {
+    if constexpr (std::is_same<W, gbbs::empty>()) {
+      n_dist = dists[s].first + 1;
+    } else {
       n_dist = dists[s].first + w;
     }
     if (n_dist < dist) {
       gbbs::write_min(&(dists[d].first), n_dist);
       if (!dists[d].second &&
           gbbs::atomic_compare_and_swap(&dists[d].second, false,
-                                        true)) {  // First visitor
+                                        true)) { // First visitor
         return std::optional<Distance>(dist);
       }
     }
     return std::nullopt;
   }
 
-  inline bool cond(const uintE& d) const { return true; }
+  inline bool cond(const uintE &d) const { return true; }
 };
 
 template <class Graph>
-auto DeltaStepping(Graph& G, uintE src, double delta,
+auto DeltaStepping(Graph &G, uintE src, double delta,
                    size_t num_buckets = 128) {
+  // visits = 0;
   using W = typename Graph::weight_type;
   using Distance =
       typename std::conditional<std::is_same<W, gbbs::empty>::value, uintE,
@@ -91,18 +94,18 @@ auto DeltaStepping(Graph& G, uintE src, double delta,
   dists[src] = {(Distance)0, false};
   auto bkts = sequence<uintE>(n, UINT_E_MAX);
 
-  auto get_bkt = [&](const Distance& dist) -> uintE {
+  auto get_bkt = [&](const Distance &dist) -> uintE {
     return (dist == kMaxWeight) ? UINT_E_MAX : (uintE)(dist / delta);
   };
-  auto get_ring = parlay::delayed_seq<uintE>(n, [&](const size_t& v) -> uintE {
+  auto get_ring = parlay::delayed_seq<uintE>(n, [&](const size_t &v) -> uintE {
     auto d = dists[v].first;
     return (d == kMaxWeight) ? UINT_E_MAX : (uintE)(d / delta);
   });
   auto b = make_vertex_buckets(n, get_ring, increasing, num_buckets);
 
-  auto apply_f = [&](const uintE v, const Distance& oldDist) -> void {
+  auto apply_f = [&](const uintE v, const Distance &oldDist) -> void {
     Distance newDist = dists[v].first;
-    dists[v] = {newDist, false};  // reset flag
+    dists[v] = {newDist, false}; // reset flag
     // Compute the previous bucket and new bucket for the vertex.
     uintE prev_bkt = get_bkt(oldDist), new_bkt = get_bkt(newDist);
     bkts[v] = b.get_bucket(prev_bkt, new_bkt);
@@ -146,15 +149,12 @@ auto DeltaStepping(Graph& G, uintE src, double delta,
     bkt = b.next_bucket();
     bktt.stop();
   }
-  auto get_dist = [&](size_t i) {
-    return (dists[i].first == kMaxWeight) ? 0 : dists[i].first;
-  };
-  auto dist_im = parlay::delayed_seq<Distance>(n, get_dist);
-  std::cout << "max_dist = " << parlay::reduce_max(dist_im) << std::endl;
   bktt.next("bucket time");
   auto ret = sequence<Distance>::from_function(
       n, [&](size_t i) { return dists[i].first; });
+
+  // std::cout << "Number of relaxations: " << visits << std::endl;
   return ret;
 }
 
-}  // namespace gbbs
+} // namespace gbbs

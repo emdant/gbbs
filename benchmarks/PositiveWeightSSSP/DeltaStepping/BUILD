@@ -14,7 +14,23 @@ cc_library(
 )
 
 cc_binary(
-    name = "DeltaStepping_main",
+    name = "DeltaStepping_main-int32",
     srcs = ["DeltaStepping.cc"],
     deps = [":DeltaStepping"],
 )
+
+cc_binary(
+    name = "DeltaStepping_main-float",
+    srcs = ["DeltaStepping.cc"],
+    deps = [":DeltaStepping"],
+    copts=["-DUSE_FLOAT"]
+)
+
+filegroup(
+    name = "DeltaStepping_main",
+    srcs = [
+        ":DeltaStepping_main-int32",
+        ":DeltaStepping_main-float",
+    ],
+)
+

@@ -40,12 +40,11 @@
 namespace gbbs {
 
 template <class Graph>
-double DeltaStepping_runner(Graph& G, commandLine P) {
-  uintE src = P.getOptionLongValue("-src", 0);
+double DeltaStepping_runner(Graph &G, commandLine P, uintE src) {
   size_t num_buckets = P.getOptionLongValue("-nb", 32);
   double delta = P.getOptionDoubleValue("-delta", 1.0);
 
-  std::cout << "### Application: DeltaStepping" << std::endl;
+  std::cout << "\n### Application: DeltaStepping" << std::endl;
   std::cout << "### Graph: " << P.getArgument(0) << std::endl;
   std::cout << "### Threads: " << num_workers() << std::endl;
   std::cout << "### n: " << G.n << std::endl;
@@ -65,10 +64,32 @@ double DeltaStepping_runner(Graph& G, commandLine P) {
   double tt = t.stop();
 
   std::cout << "### Running Time: " << tt << std::endl;
+
+  using W = typename Graph::weight_type;
+  using Distance =
+      typename std::conditional<std::is_same<W, gbbs::empty>::value, uintE,
+                                W>::type;
+  constexpr Distance kMaxWeight = std::numeric_limits<Distance>::max();
+
+  auto not_max_cmp = [&](Distance a, Distance b) {
+    if (b == kMaxWeight)
+      return false;
+    if (a == kMaxWeight)
+      return true;
+    return a < b;
+  };
+
+  auto not_max = [&](Distance e) { return e != kMaxWeight; };
+
+  auto longest_distance = *parlay::max_element(dists, not_max_cmp);
+  auto reached = parlay::count_if(dists, not_max);
+  std::cout << "Nodes reached: " << reached << std::endl;
+  std::cout << "Longest distance: " << longest_distance << std::endl;
+
   return tt;
 }
 
-}  // namespace gbbs
+} // namespace gbbs
 
 // generate_float_main(gbbs::DeltaStepping_runner, false);
-generate_weighted_main(gbbs::DeltaStepping_runner, false);
+generate_weighted_traversal_main(gbbs::DeltaStepping_runner, false);
