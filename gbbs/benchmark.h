@@ -3,6 +3,7 @@
 
 #include "assert.h"
 #include "graph_io.h"
+#include "replace.h"
 #include "source.h"
 
 #ifdef USE_FLOAT
@@ -293,6 +294,7 @@ inline std::string GetSuffix(const std::string filename) {
     size_t rounds = P.getOptionLongValue("-rounds", 3);                        \
     size_t num_sources = P.getOptionLongValue("-sources", 1);                  \
     std::string sources_file = P.getOptionValue("-sfile", "");                 \
+    std::string weights_file = P.getOptionValue("-wfile", "");                 \
     if (compressed) {                                                          \
       if (symmetric) {                                                         \
         auto G = gbbs::gbbs_io::read_compressed_symmetric_graph<weight_type>(  \
@@ -309,12 +311,16 @@ inline std::string GetSuffix(const std::string filename) {
           auto G =                                                             \
               gbbs::gbbs_io::read_gap_weighted_symmetric_graph<weight_type>(   \
                   iFile, mmap, binary);                                        \
+          if (weights_file != "")                                              \
+            replace_weights(G, weights_file);                                  \
           run_traversal_app(G, APP, mutates, sources_file, rounds,             \
                             num_sources)                                       \
         } else {                                                               \
           auto G =                                                             \
               gbbs::gbbs_io::read_gap_weighted_asymmetric_graph<weight_type>(  \
                   iFile, mmap, binary);                                        \
+          if (weights_file != "")                                              \
+            replace_weights(G, weights_file);                                  \
           run_traversal_app(G, APP, mutates, sources_file, rounds,             \
                             num_sources)                                       \
         }                                                                      \

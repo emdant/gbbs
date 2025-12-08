@@ -16,6 +16,7 @@ cc_library(
         ":macros",
         ":vertex_subset",
         ":source",
+        ":replace",
         "//gbbs/helpers:parse_command_line",
     ],
 )
@@ -116,6 +117,9 @@ cc_library(
 )
 
 cc_library(name="source", hdrs=["source.h"], deps=[":macros"])
+cc_library(
+    name="replace", hdrs=["replace.h"], deps=[":graph", ":macros", ":source", ":vertex"]
+)
 
 cc_library(
     name="graph_mutation",
