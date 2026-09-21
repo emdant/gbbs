@@ -36,12 +36,15 @@
 #define WEIGHTED 1
 
 #include "DeltaStepping.h"
+#include "delta_from_c.h"
 
 namespace gbbs {
 
 template <class Graph>
 double DeltaStepping_runner(Graph &G, commandLine P, uintE src) {
   size_t num_buckets = P.getOptionLongValue("-nb", 32);
+  DeltaSelector delta_selector = DeltaSelector::FromCommandLine(P);
+  delta_selector.Warmup(G); // no-op unless -delta-outside-timer
   double delta = P.getOptionDoubleValue("-delta", 1.0);
 
   std::cout << "\n### Application: DeltaStepping" << std::endl;
@@ -49,8 +52,14 @@ double DeltaStepping_runner(Graph &G, commandLine P, uintE src) {
   std::cout << "### Threads: " << num_workers() << std::endl;
   std::cout << "### n: " << G.n << std::endl;
   std::cout << "### m: " << G.m << std::endl;
-  std::cout << "### Params: -src = " << src << " -delta = " << delta
-            << " -nb (num_buckets) = " << num_buckets << std::endl;
+  if (delta_selector.use_c()) {
+    std::cout << "### Params: -src = " << src
+              << " -C = " << delta_selector.c()
+              << " -nb (num_buckets) = " << num_buckets << std::endl;
+  } else {
+    std::cout << "### Params: -src = " << src << " -delta = " << delta
+              << " -nb (num_buckets) = " << num_buckets << std::endl;
+  }
   std::cout << "### ------------------------------------" << std::endl;
 
   if (num_buckets != (((uintE)1) << parlay::log2_up(num_buckets))) {
@@ -60,10 +69,14 @@ double DeltaStepping_runner(Graph &G, commandLine P, uintE src) {
   }
   timer t;
   t.start();
+  // Inside the timed region, before DeltaStepping allocates its buckets: see
+  // delta_from_c.h for how to move this out of the timer.
+  delta = delta_selector.Get(G);
   auto dists = DeltaStepping(G, src, delta, num_buckets);
   double tt = t.stop();
 
   std::cout << "### Running Time: " << tt << std::endl;
+  delta_selector.PrintLast();
 
   using W = typename Graph::weight_type;
   using Distance =

@@ -6,7 +6,10 @@ package(
 
 cc_library(
     name = "DeltaStepping",
-    hdrs = ["DeltaStepping.h"],
+    hdrs = [
+        "DeltaStepping.h",
+        "delta_from_c.h",
+    ],
     deps = [
         "//gbbs",
         "//gbbs:bucket",
