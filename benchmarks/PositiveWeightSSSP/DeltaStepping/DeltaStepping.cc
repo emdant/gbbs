@@ -53,8 +53,7 @@ double DeltaStepping_runner(Graph &G, commandLine P, uintE src) {
   std::cout << "### n: " << G.n << std::endl;
   std::cout << "### m: " << G.m << std::endl;
   if (delta_selector.use_c()) {
-    std::cout << "### Params: -src = " << src
-              << " -C = " << delta_selector.c()
+    std::cout << "### Params: -src = " << src << " -C = " << delta_selector.c()
               << " -nb (num_buckets) = " << num_buckets << std::endl;
   } else {
     std::cout << "### Params: -src = " << src << " -delta = " << delta
@@ -67,22 +66,28 @@ double DeltaStepping_runner(Graph &G, commandLine P, uintE src) {
               << "\n";
     exit(-1);
   }
-  timer t;
-  t.start();
-  // Inside the timed region, before DeltaStepping allocates its buckets: see
-  // delta_from_c.h for how to move this out of the timer.
-  delta = delta_selector.Get(G);
-  auto dists = DeltaStepping(G, src, delta, num_buckets);
-  double tt = t.stop();
-
-  std::cout << "### Running Time: " << tt << std::endl;
-  delta_selector.PrintLast();
-
   using W = typename Graph::weight_type;
   using Distance =
       typename std::conditional<std::is_same<W, gbbs::empty>::value, uintE,
                                 W>::type;
   constexpr Distance kMaxWeight = std::numeric_limits<Distance>::max();
+
+  auto dists = sequence<std::pair<Distance, bool>>::from_function(
+      G.n, [&](size_t i) { return std::make_pair(kMaxWeight, false); });
+
+  timer t;
+  t.start();
+  // Inside the timed region, before DeltaStepping allocates its buckets: see
+  // delta_from_c.h for how to move this out of the timer.
+  delta = delta_selector.Get(G);
+  DeltaStepping<Graph, Distance>(G, dists, src, delta, num_buckets);
+  double tt = t.stop();
+
+  auto dists_single = sequence<Distance>::from_function(
+      G.n, [&](size_t i) { return dists[i].first; });
+
+  std::cout << "### Running Time: " << tt << std::endl;
+  delta_selector.PrintLast();
 
   auto not_max_cmp = [&](Distance a, Distance b) {
     if (b == kMaxWeight)
@@ -94,8 +99,8 @@ double DeltaStepping_runner(Graph &G, commandLine P, uintE src) {
 
   auto not_max = [&](Distance e) { return e != kMaxWeight; };
 
-  auto longest_distance = *parlay::max_element(dists, not_max_cmp);
-  auto reached = parlay::count_if(dists, not_max);
+  auto longest_distance = *parlay::max_element(dists_single, not_max_cmp);
+  auto reached = parlay::count_if(dists_single, not_max);
   std::cout << "Nodes reached: " << reached << std::endl;
   std::cout << "Longest distance: " << longest_distance << std::endl;
 

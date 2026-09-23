@@ -78,19 +78,14 @@ template <class W, class Distance> struct Visit_F {
   inline bool cond(const uintE &d) const { return true; }
 };
 
-template <class Graph>
-auto DeltaStepping(Graph &G, uintE src, double delta,
-                   size_t num_buckets = 128) {
+template <class Graph, typename Distance>
+auto DeltaStepping(Graph &G, sequence<std::pair<Distance, bool>> &dists,
+                   uintE src, double delta, size_t num_buckets = 128) {
   // visits = 0;
   using W = typename Graph::weight_type;
-  using Distance =
-      typename std::conditional<std::is_same<W, gbbs::empty>::value, uintE,
-                                W>::type;
   constexpr Distance kMaxWeight = std::numeric_limits<Distance>::max();
   size_t n = G.n;
   std::cout << "Using delta = " << delta << std::endl;
-  auto dists = sequence<std::pair<Distance, bool>>::from_function(
-      n, [&](size_t i) { return std::make_pair(kMaxWeight, false); });
   dists[src] = {(Distance)0, false};
   auto bkts = sequence<uintE>(n, UINT_E_MAX);
 
@@ -150,11 +145,9 @@ auto DeltaStepping(Graph &G, uintE src, double delta,
     bktt.stop();
   }
   bktt.next("bucket time");
-  auto ret = sequence<Distance>::from_function(
-      n, [&](size_t i) { return dists[i].first; });
 
   // std::cout << "Number of relaxations: " << visits << std::endl;
-  return ret;
+  // return ret;
 }
 
 } // namespace gbbs
