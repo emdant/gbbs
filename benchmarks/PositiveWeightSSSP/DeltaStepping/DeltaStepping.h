@@ -27,13 +27,67 @@
 #include "gbbs/gbbs.h"
 #include <atomic>
 #include <cmath>
+#include <new>
 
 namespace gbbs {
+
+#ifdef __cpp_lib_hardware_interference_size
+#if defined(__GNUC__) && !defined(__clang__)
+// GCC warns that the value follows -mtune; it only has to agree within this
+// binary.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winterference-size"
+#endif
+inline constexpr std::size_t kCacheLineSize =
+    std::hardware_destructive_interference_size;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+#else
+inline constexpr std::size_t kCacheLineSize = 64;
+#endif
+
+// A vertex's distance and first-visitor flag, alone on their own cache line so
+// that relaxations of different vertices never falsely share one.
+template <class Distance> struct alignas(kCacheLineSize) PaddedDist {
+  Distance first;
+  bool second;
+};
+
+// parlay::sequence carves its elements out of a raw byte buffer, which it
+// allocates without asking for any alignment, so the allocator must supply it.
+template <class T> struct CacheAlignedAllocator {
+  using value_type = T;
+
+  CacheAlignedAllocator() = default;
+  template <class U> CacheAlignedAllocator(const CacheAlignedAllocator<U> &) {}
+
+  T *allocate(std::size_t n) {
+    return static_cast<T *>(
+        ::operator new(n * sizeof(T), std::align_val_t{kCacheLineSize}));
+  }
+  void deallocate(T *p, std::size_t) {
+    ::operator delete(p, std::align_val_t{kCacheLineSize});
+  }
+
+  template <class U> bool operator==(const CacheAlignedAllocator<U> &) const {
+    return true;
+  }
+  template <class U> bool operator!=(const CacheAlignedAllocator<U> &) const {
+    return false;
+  }
+};
+
+template <class Distance>
+using PaddedDistSequence =
+    parlay::sequence<PaddedDist<Distance>,
+                     CacheAlignedAllocator<PaddedDist<Distance>>>;
+
 // std::atomic<std::size_t> visits{0};
 
 template <class W, class Distance> struct Visit_F {
-  sequence<std::pair<Distance, bool>> &dists;
-  Visit_F(sequence<std::pair<Distance, bool>> &_dists) : dists(_dists) {}
+  PaddedDistSequence<Distance> &dists;
+  Visit_F(PaddedDistSequence<Distance> &_dists) : dists(_dists) {}
 
   inline std::optional<Distance> update(const uintE &s, const uintE &d,
                                         const W &w) {
@@ -89,8 +143,8 @@ auto DeltaStepping(Graph &G, uintE src, double delta,
   constexpr Distance kMaxWeight = std::numeric_limits<Distance>::max();
   size_t n = G.n;
   std::cout << "Using delta = " << delta << std::endl;
-  auto dists = sequence<std::pair<Distance, bool>>::from_function(
-      n, [&](size_t i) { return std::make_pair(kMaxWeight, false); });
+  auto dists = PaddedDistSequence<Distance>::from_function(
+      n, [&](size_t i) { return PaddedDist<Distance>{kMaxWeight, false}; });
   dists[src] = {(Distance)0, false};
   auto bkts = sequence<uintE>(n, UINT_E_MAX);
 
